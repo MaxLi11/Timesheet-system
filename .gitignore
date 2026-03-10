@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+timesheet.db
+temp_*
+
+# Node
+node_modules/
+frontend/node_modules/
+dist/
+dist-ssr/
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+*.xlsx
+*.xls
