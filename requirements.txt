@@ -4,4 +4,3 @@ sqlalchemy
 pandas
 openpyxl
 python-multipart
-dayjs-py
