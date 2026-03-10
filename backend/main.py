@@ -26,7 +26,14 @@ def health():
     return {"status": "healthy"}
 
 # Initialize database
-database.init_db()
+@app.on_event("startup")
+async def startup_event():
+    print("Starting up... Initializing database...")
+    try:
+        database.init_db()
+        print("Database initialized successfully.")
+    except Exception as e:
+        print(f"Database initialization failed: {e}")
 
 # Dependency for DB session
 def get_db():

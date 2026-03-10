@@ -15,14 +15,17 @@ import dayjs from 'dayjs';
 import * as dataHelper from './utils/dataHelper';
 
 const App = () => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [filters, setFilters] = useState({
-    period: 'monthly',
-    department: 'All',
-    project: 'All'
-  });
+  const [status, setStatus] = useState('checking'); // 'checking', 'connected', 'error'
+
+  const checkConnection = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/ping');
+      if (res.ok) setStatus('connected');
+      else setStatus('error');
+    } catch (err) {
+      setStatus('error');
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -31,16 +34,20 @@ const App = () => {
       if (!res.ok) throw new Error('Backend responded with error');
       const json = await res.json();
       setData(json);
+      setStatus('connected');
     } catch (err) {
       console.error('Failed to fetch stats:', err);
-      // alert('无法连接到后端服务 (127.0.0.1:8000)，请确保 Backend 窗口已启动。');
+      setStatus('error');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    checkConnection();
     fetchData();
+    const interval = setInterval(checkConnection, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleFileUpload = async (e) => {
@@ -175,14 +182,21 @@ const App = () => {
         <div style={{ marginTop: 'auto', paddingBottom: '1rem' }}>
           <div style={{
             fontSize: '0.7rem',
-            color: data.length > 0 || loading ? 'var(--success)' : 'var(--warning)',
+            color: status === 'connected' ? 'var(--success)' : status === 'error' ? 'var(--danger)' : 'var(--warning)',
             display: 'flex',
             alignItems: 'center',
             gap: '5px',
             marginBottom: '1rem'
           }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor' }}></div>
-            Backend: {data.length > 0 || loading ? 'Connected' : 'Checking...'}
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: 'currentColor',
+              boxShadow: status === 'connected' ? '0 0 10px var(--success)' : 'none'
+            }}></div>
+            Backend: {status === 'connected' ? 'Connected' : status === 'error' ? 'Disconnected' : 'Checking...'}
+            {status === 'error' && <RefreshCcw size={10} style={{ cursor: 'pointer', marginLeft: '5px' }} onClick={checkConnection} />}
           </div>
           <label className="upload-zone">
             <Upload size={24} style={{ marginBottom: '10px' }} />
