@@ -48,12 +48,13 @@ const App = () => {
     formData.append('file', file);
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:8000/upload', { method: 'POST', body: formData });
+      const res = await fetch('http://127.0.0.1:8000/upload', { method: 'POST', body: formData });
       const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || result.message || 'Upload failed');
       alert(`Success! Processed ${result.rows_processed} rows.`);
       fetchData();
     } catch (err) {
-      alert('Upload failed');
+      alert(`Upload failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
