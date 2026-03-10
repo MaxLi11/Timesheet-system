@@ -3,24 +3,18 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
-venv/
-ENV/
+.env
+.pytest_cache/
 timesheet.db
-temp_*
 
 # Node
 node_modules/
 frontend/node_modules/
 dist/
-dist-ssr/
-*.local
+frontend/dist/
+.eslintcache
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Project specific
-*.xlsx
-*.xls
+# Tooling
+.DS_Store
+*.log
+temp_*
