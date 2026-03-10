@@ -172,7 +172,18 @@ const App = () => {
           <div className={`nav-item ${activeTab === 'gantt' ? 'active' : ''}`} onClick={() => setActiveTab('gantt')}><Users size={20} />Timeline</div>
           <div className={`nav-item ${activeTab === 'heatmap' ? 'active' : ''}`} onClick={() => setActiveTab('heatmap')}><Calendar size={20} />Activity</div>
         </nav>
-        <div style={{ marginTop: 'auto' }}>
+        <div style={{ marginTop: 'auto', paddingBottom: '1rem' }}>
+          <div style={{
+            fontSize: '0.7rem',
+            color: data.length > 0 || loading ? 'var(--success)' : 'var(--warning)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            marginBottom: '1rem'
+          }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor' }}></div>
+            Backend: {data.length > 0 || loading ? 'Connected' : 'Checking...'}
+          </div>
           <label className="upload-zone">
             <Upload size={24} style={{ marginBottom: '10px' }} />
             <p style={{ fontSize: '0.8rem' }}>Upload Excel</p>

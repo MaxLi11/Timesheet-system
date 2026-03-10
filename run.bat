@@ -16,9 +16,14 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
+:: 尝试清理旧进程（如果端口被占用）
+echo 正在清理旧的端口占用 (8000/5173)...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000') do taskkill /f /pid %%a >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5173') do taskkill /f /pid %%a >nul 2>&1
+
 :: 启动后端服务
 echo [2/3] 正在启动后端服务 (FastAPI)...
-start "Timesheet-Backend" cmd /c ".venv\Scripts\python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload"
+start "Timesheet-Backend" cmd /c ".venv\Scripts\python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload"
 
 :: 启动前端服务
 echo [3/3] 正在启动前端服务 (Vite)...

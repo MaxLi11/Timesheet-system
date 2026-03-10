@@ -14,7 +14,16 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+@app.get("/ping")
+def ping():
+    return {"status": "pong"}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
 # Initialize database
 database.init_db()
