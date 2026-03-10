@@ -28,6 +28,7 @@ class TimeEntry(Base):
     id = Column(Integer, primary_key=True, index=True)
     employee_name = Column(String, index=True)
     employee_id = Column(String, index=True)
+    department = Column(String, index=True)
     project_name = Column(String, index=True)
     category = Column(String) # Project vs Non-Project (Leave, etc)
     start_date = Column(Date)

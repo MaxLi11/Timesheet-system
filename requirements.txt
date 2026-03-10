@@ -1,7 +1,7 @@
 fastapi
 uvicorn
+sqlalchemy
 pandas
 openpyxl
-sqlalchemy
 python-multipart
-pytest
+dayjs-py
