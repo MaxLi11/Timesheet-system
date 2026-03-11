@@ -295,48 +295,58 @@ const App = () => {
   const dashPeriodOptions = useMemo(() => dataHelper.getReportingPeriodOptions(data), [data]);
 
   const filteredData = useMemo(() => {
+    // Fast path: no filters active
+    if (!dashYear && dashSelectedDepts.size === 0 && dashSelectedProjects.size === 0) return data;
+
     return data.filter(item => {
-      // 1. Time Filters
-      const itemDate = dayjs(item.start_date);
-      const y = itemDate.year().toString();
-      const m = (itemDate.month() + 1).toString().padStart(2, '0');
-      const w = itemDate.isoWeek().toString();
-
-      if (dashYear && y !== dashYear) return false;
-      if (dashMonth && m !== dashMonth) return false;
-      if (dashWeek && w !== dashWeek) return false;
-
-      // 2. Department & Project Multi-select Filters
+      // Time filters — only parse date when a time filter is actually set
+      if (dashYear || dashMonth || dashWeek) {
+        if (!item.start_date) return false;
+        const itemDate = dayjs(item.start_date);
+        if (dashYear && itemDate.year().toString() !== dashYear) return false;
+        if (dashMonth && (itemDate.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
+        if (dashWeek && itemDate.isoWeek().toString() !== dashWeek) return false;
+      }
+      // Dept & Project multi-select
       if (dashSelectedDepts.size > 0 && !dashSelectedDepts.has(item.department)) return false;
       if (dashSelectedProjects.size > 0 && !dashSelectedProjects.has(item.project_name)) return false;
-
       return true;
     });
   }, [data, dashYear, dashMonth, dashWeek, dashSelectedDepts, dashSelectedProjects]);
 
   const dashAvailableDepts = useMemo(() => {
-    // Determine available departments based on TIME filtered data only (so selecting a dept doesn't shrink the dept list)
+    // Fast path: no time filter — just grab all distinct depts without dayjs
+    if (!dashYear && !dashMonth && !dashWeek)
+      return Array.from(new Set(data.map(i => i.department).filter(Boolean))).sort();
+
     const timeFiltered = data.filter(item => {
-      const itemDate = dayjs(item.start_date);
-      if (dashYear && itemDate.year().toString() !== dashYear) return false;
-      if (dashMonth && (itemDate.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
-      if (dashWeek && itemDate.isoWeek().toString() !== dashWeek) return false;
+      if (!item.start_date) return false;
+      const d = dayjs(item.start_date);
+      if (dashYear && d.year().toString() !== dashYear) return false;
+      if (dashMonth && (d.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
+      if (dashWeek && d.isoWeek().toString() !== dashWeek) return false;
       return true;
     });
-    return Array.from(new Set(timeFiltered.map(i => i.department))).sort();
+    return Array.from(new Set(timeFiltered.map(i => i.department).filter(Boolean))).sort();
   }, [data, dashYear, dashMonth, dashWeek]);
 
   const dashAvailableProjects = useMemo(() => {
-    // Determine available projects based on TIME and DEPT filtered data
+    // Fast path: no time or dept filters
+    if (!dashYear && !dashMonth && !dashWeek && dashSelectedDepts.size === 0)
+      return Array.from(new Set(data.map(i => i.project_name).filter(Boolean))).sort();
+
     const preFiltered = data.filter(item => {
-      const itemDate = dayjs(item.start_date);
-      if (dashYear && itemDate.year().toString() !== dashYear) return false;
-      if (dashMonth && (itemDate.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
-      if (dashWeek && itemDate.isoWeek().toString() !== dashWeek) return false;
+      if (dashYear || dashMonth || dashWeek) {
+        if (!item.start_date) return false;
+        const d = dayjs(item.start_date);
+        if (dashYear && d.year().toString() !== dashYear) return false;
+        if (dashMonth && (d.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
+        if (dashWeek && d.isoWeek().toString() !== dashWeek) return false;
+      }
       if (dashSelectedDepts.size > 0 && !dashSelectedDepts.has(item.department)) return false;
       return true;
     });
-    return Array.from(new Set(preFiltered.map(i => i.project_name))).sort();
+    return Array.from(new Set(preFiltered.map(i => i.project_name).filter(Boolean))).sort();
   }, [data, dashYear, dashMonth, dashWeek, dashSelectedDepts]);
 
   const toggleDashDept = (dept) => {
