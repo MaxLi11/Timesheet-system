@@ -41,6 +41,8 @@ const App = () => {
   const [approvalData, setApprovalData] = useState([]);
   const [approvalYear, setApprovalYear] = useState('');
   const [approvalMonth, setApprovalMonth] = useState('');
+  const [selectedProjects, setSelectedProjects] = useState(new Set()); // multi-select
+  const [selectedApprover, setSelectedApprover] = useState(''); // single-select
 
   const t = {
     zh: {
@@ -62,7 +64,9 @@ const App = () => {
       allMonths: '全年', allWeeks: '全月',
       pleaseSelectYear: '请先选择年度',
       pendingApprover: '未操作者', pendingCount: '待审条数', pendingHours: '待审工时',
-      noApprovalIssues: '当前筛选周期内没有待审批工时。'
+      noApprovalIssues: '当前筛选周期内没有待审批工时。',
+      filterProject: '筛选项目（可多选）', filterApprover: '筛选未操作者',
+      allApprovers: '全部人员', selectAll: '全选', clearAll: '清空'
     },
     en: {
       dashboard: 'Dashboard', stats: 'Statistics', timeline: 'Timeline', activity: 'Activity',
@@ -83,7 +87,9 @@ const App = () => {
       allMonths: 'All Months', allWeeks: 'All Weeks',
       pleaseSelectYear: 'Please select a year first',
       pendingApprover: 'Pending Approver', pendingCount: 'Pending Count', pendingHours: 'Pending Hours',
-      noApprovalIssues: 'No pending approvals in the selected period.'
+      noApprovalIssues: 'No pending approvals in the selected period.',
+      filterProject: 'Filter Projects (multi-select)', filterApprover: 'Filter Approver',
+      allApprovers: 'All Approvers', selectAll: 'All', clearAll: 'Clear'
     }
   }[lang];
 
@@ -216,10 +222,31 @@ const App = () => {
       setApprovalYear(approvalYears[approvalYears.length - 1]);
   }, [approvalYears, approvalYear]);
 
-  const approvalRecords = useMemo(() =>
-    dataHelper.computeApprovalRate(approvalData, approvalYear, approvalMonth),
+  // Available projects and approvers for the current period
+  const availableProjects = useMemo(() =>
+    dataHelper.getApprovalProjects(approvalData, approvalYear, approvalMonth),
     [approvalData, approvalYear, approvalMonth]
   );
+
+  const availableApprovers = useMemo(() =>
+    dataHelper.getApprovalApprovers(approvalData, approvalYear, approvalMonth, selectedProjects),
+    [approvalData, approvalYear, approvalMonth, selectedProjects]
+  );
+
+  const approvalRecords = useMemo(() =>
+    dataHelper.computeApprovalRate(approvalData, approvalYear, approvalMonth, selectedProjects, selectedApprover),
+    [approvalData, approvalYear, approvalMonth, selectedProjects, selectedApprover]
+  );
+
+  // Toggle a project in the multi-select set
+  const toggleProject = (proj) => {
+    setSelectedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(proj)) next.delete(proj); else next.add(proj);
+      return next;
+    });
+    setSelectedApprover(''); // reset approver when projects change
+  };
 
   const exportApprovalExcel = () => {
     const rows = approvalRecords.map(r => ({
@@ -554,23 +581,32 @@ const App = () => {
 
         {activeTab === 'approval' && (
           <div className="reporting-tab">
+            {/* Top control bar: period + actions */}
             <div className="reporting-top-bar">
               <div className="reporting-filters">
                 <div className="filter-group">
                   <label>{t.selectYear}</label>
-                  <select value={approvalYear} onChange={e => { setApprovalYear(e.target.value); setApprovalMonth(''); }}>
+                  <select value={approvalYear} onChange={e => { setApprovalYear(e.target.value); setApprovalMonth(''); setSelectedProjects(new Set()); setSelectedApprover(''); }}>
                     {approvalYears.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
                 {approvalYear && (
                   <div className="filter-group">
                     <label>{t.selectMonth}</label>
-                    <select value={approvalMonth} onChange={e => setApprovalMonth(e.target.value)}>
+                    <select value={approvalMonth} onChange={e => { setApprovalMonth(e.target.value); setSelectedProjects(new Set()); setSelectedApprover(''); }}>
                       <option value="">{t.allMonths}</option>
                       {approvalMonths.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
                 )}
+                {/* Approver single-select */}
+                <div className="filter-group">
+                  <label>{t.filterApprover}</label>
+                  <select value={selectedApprover} onChange={e => setSelectedApprover(e.target.value)}>
+                    <option value="">{t.allApprovers}</option>
+                    {availableApprovers.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
               </div>
               <div className="reporting-actions">
                 {approvalRecords.length > 0 && (
@@ -580,6 +616,44 @@ const App = () => {
                 )}
               </div>
             </div>
+
+            {/* Project multi-select panel */}
+            {availableProjects.length > 0 && (
+              <div className="approval-project-panel">
+                <div className="project-panel-header">
+                  <span className="filter-group-label">{t.filterProject}</span>
+                  <div className="project-panel-btns">
+                    <button onClick={() => { setSelectedProjects(new Set(availableProjects)); setSelectedApprover(''); }}>{t.selectAll}</button>
+                    <button onClick={() => { setSelectedProjects(new Set()); setSelectedApprover(''); }}>{t.clearAll}</button>
+                  </div>
+                </div>
+                <div className="project-checkboxes">
+                  {availableProjects.map(proj => (
+                    <label key={proj} className={`project-chip ${selectedProjects.has(proj) ? 'selected' : ''}`}>
+                      <input type="checkbox" checked={selectedProjects.has(proj)} onChange={() => toggleProject(proj)} />
+                      {proj}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Summary cards */}
+            {approvalRecords.length > 0 && (
+              <div className="approval-summary-cards">
+                <div className="approval-summary-card">
+                  <span className="summary-label">{t.pendingApprover}（{approvalRecords.length} 人）</span>
+                </div>
+                <div className="approval-summary-card accent">
+                  <span className="summary-label">{t.pendingCount}</span>
+                  <span className="summary-value">{approvalRecords.reduce((a, r) => a + r.count, 0)}</span>
+                </div>
+                <div className="approval-summary-card danger">
+                  <span className="summary-label">{t.pendingHours}</span>
+                  <span className="summary-value">{approvalRecords.reduce((a, r) => a + r.total_hours, 0).toFixed(2)}h</span>
+                </div>
+              </div>
+            )}
 
             {approvalRecords.length === 0 ? (
               <div className="card no-issues">{t.noApprovalIssues}</div>

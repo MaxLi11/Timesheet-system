@@ -455,3 +455,109 @@ button:hover {
   padding: 2rem;
   font-size: 1rem;
 }
+
+/* ── Approval Rate: project multi-select panel ───────────────────── */
+.approval-project-panel {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 1rem 1.2rem;
+  margin-top: 0.5rem;
+}
+
+.project-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.filter-group-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.project-panel-btns {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.project-panel-btns button {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.project-panel-btns button:hover { background: rgba(99, 102, 241, 0.3); }
+
+.project-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.project-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+.project-chip input { display: none; }
+.project-chip:hover { border-color: var(--primary); color: var(--text); }
+.project-chip.selected {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: var(--primary);
+  color: #c7d2fe;
+}
+
+/* ── Approval Rate: summary cards ────────────────────────────────── */
+.approval-summary-cards {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.approval-summary-card {
+  flex: 1;
+  min-width: 140px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 0.9rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.approval-summary-card.accent { border-color: rgba(245, 158, 11, 0.4); }
+.approval-summary-card.danger { border-color: rgba(239, 68, 68, 0.4); }
+
+.summary-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.summary-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+.approval-summary-card.accent .summary-value { color: #f59e0b; }
+.approval-summary-card.danger .summary-value { color: #ef4444; }

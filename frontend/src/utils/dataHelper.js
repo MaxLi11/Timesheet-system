@@ -222,15 +222,16 @@ export const groupReportingByDept = (records) => {
 
 /**
  * Computes pending approval statistics from raw /approval-rate entries.
- * Groups by pending_approver + period (year or year+month), returning
- * per-person counts and total hours.
+ * Groups by pending_approver, returning per-person counts and total hours.
  *
- * @param {Array}  entries     - Raw data from /approval-rate endpoint
- * @param {string} filterYear  - Required
- * @param {string} filterMonth - Optional (e.g. '2026-03')
+ * @param {Array}  entries          - Raw data from /approval-rate endpoint
+ * @param {string} filterYear       - Required
+ * @param {string} filterMonth      - Optional (e.g. '2026-03')
+ * @param {Set}    selectedProjects - Optional Set of project names. Empty = all.
+ * @param {string} selectedApprover - Optional: filter by specific pending_approver
  * @returns {Array} sorted by dept then pending_approver
  */
-export const computeApprovalRate = (entries, filterYear, filterMonth) => {
+export const computeApprovalRate = (entries, filterYear, filterMonth, selectedProjects = new Set(), selectedApprover = '') => {
     if (!filterYear) return [];
 
     const map = {};
@@ -241,22 +242,61 @@ export const computeApprovalRate = (entries, filterYear, filterMonth) => {
 
         if (year !== filterYear) return;
         if (filterMonth && month !== filterMonth) return;
-
+        // Project filter (selectedProjects empty = show all)
+        if (selectedProjects.size > 0 && !selectedProjects.has(entry.project_name)) return;
+        // Approver filter
         const approver = (entry.pending_approver || '').trim() || '（未知）';
-        const key = `${approver}`;
-        if (!map[key]) {
-            map[key] = {
+        if (selectedApprover && approver !== selectedApprover) return;
+
+        if (!map[approver]) {
+            map[approver] = {
                 pending_approver: approver,
                 department: entry.department,
                 count: 0,
                 total_hours: 0
             };
         }
-        map[key].count += 1;
-        map[key].total_hours += entry.hours;
+        map[approver].count += 1;
+        map[approver].total_hours += entry.hours;
     });
 
     return Object.values(map)
         .map(r => ({ ...r, total_hours: parseFloat(r.total_hours.toFixed(2)) }))
         .sort((a, b) => a.department.localeCompare(b.department) || a.pending_approver.localeCompare(b.pending_approver));
+};
+
+/**
+ * Extracts all distinct project names from approval-rate entries
+ * filtered by year/month (but ignoring project/approver filters).
+ */
+export const getApprovalProjects = (entries, filterYear, filterMonth) => {
+    const projects = new Set();
+    entries.forEach(entry => {
+        const d = dayjs(entry.start_date);
+        const year = String(d.year());
+        const month = d.format('YYYY-MM');
+        if (year !== filterYear) return;
+        if (filterMonth && month !== filterMonth) return;
+        if (entry.project_name) projects.add(entry.project_name);
+    });
+    return [...projects].sort();
+};
+
+/**
+ * Extracts all distinct pending_approver names from approval-rate entries
+ * filtered by year/month and optionally project.
+ */
+export const getApprovalApprovers = (entries, filterYear, filterMonth, selectedProjects = new Set()) => {
+    const approvers = new Set();
+    entries.forEach(entry => {
+        const d = dayjs(entry.start_date);
+        const year = String(d.year());
+        const month = d.format('YYYY-MM');
+        if (year !== filterYear) return;
+        if (filterMonth && month !== filterMonth) return;
+        if (selectedProjects.size > 0 && !selectedProjects.has(entry.project_name)) return;
+        const approver = (entry.pending_approver || '').trim();
+        if (approver) approvers.add(approver);
+    });
+    return [...approvers].sort();
 };
