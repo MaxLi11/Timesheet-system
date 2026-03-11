@@ -304,33 +304,44 @@ button:hover {
 
 .reporting-controls {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 1.5rem;
   flex-wrap: wrap;
 }
 
-.period-toggle {
+/* Cascading filter dropdowns */
+.reporting-filters {
   display: flex;
-  background: rgba(0,0,0,0.2);
-  border-radius: 10px;
-  padding: 4px;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
-.period-toggle button {
-  background: transparent;
-  border: none;
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group label {
+  font-size: 0.75rem;
   color: var(--text-muted);
-  padding: 6px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
 }
 
-.period-toggle button.active {
-  background: var(--primary);
-  color: white;
+.filter-group select {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.9rem;
+  padding: 6px 10px;
+  min-width: 120px;
 }
+
+.filter-group select:focus { outline: none; border-color: var(--primary); }
 
 .target-input {
   display: flex;

@@ -32,7 +32,9 @@ const App = () => {
   // Reporting Rate state
   const [reportingData, setReportingData] = useState([]);
   const [targetHours, setTargetHours] = useState(40);
-  const [reportingPeriod, setReportingPeriod] = useState('weekly');
+  const [filterYear, setFilterYear] = useState('');
+  const [filterMonth, setFilterMonth] = useState('');
+  const [filterWeek, setFilterWeek] = useState('');
   const [expandedDepts, setExpandedDepts] = useState(new Set());
 
   const t = {
@@ -45,10 +47,13 @@ const App = () => {
       trendTitle: '工时走势', distTitle: '项目分布', heatmapTitle: '活跃热力图', ganttTitle: '项目时间明细',
       upload: '上传 Excel', backend: '后台连接', connected: '已连接', disconnected: '未连接', checking: '检查中...',
       success: '成功！已处理', uploadFailed: '上传失败', none: '全体',
-      targetHours: '应填报工时', perPeriod: '/ 周期',
+      targetHours: '应填报工时', perPeriod: 'h / 周期',
       dept: '部门', employee: '员工', actual: '实际工时', gap: '差额', period_key: '周期',
       export: '导出 Excel', noIssues: '所有部门填报正常，未发现差异。',
-      deficit: '不足', excess: '超出'
+      deficit: '不足', excess: '超出',
+      selectYear: '选择年度', selectMonth: '选择月份', selectWeek: '选择周（可选）',
+      allMonths: '全年', allWeeks: '全月',
+      pleaseSelectYear: '请先选择年度'
     },
     en: {
       dashboard: 'Dashboard', stats: 'Statistics', timeline: 'Timeline', activity: 'Activity',
@@ -59,10 +64,13 @@ const App = () => {
       trendTitle: 'Hours Trend', distTitle: 'Project Distribution', heatmapTitle: 'Activity Heatmap', ganttTitle: 'Project Timeline',
       upload: 'Upload Excel', backend: 'Backend', connected: 'Connected', disconnected: 'Disconnected', checking: 'Checking...',
       success: 'Success! Processed', uploadFailed: 'Upload failed', none: 'All',
-      targetHours: 'Target Hours', perPeriod: '/ Period',
+      targetHours: 'Target Hours', perPeriod: 'h / Period',
       dept: 'Dept', employee: 'Employee', actual: 'Actual', gap: 'Gap', period_key: 'Period',
       export: 'Export Excel', noIssues: 'All departments are reporting correctly. No issues found.',
-      deficit: 'Deficit', excess: 'Excess'
+      deficit: 'Deficit', excess: 'Excess',
+      selectYear: 'Select Year', selectMonth: 'Select Month', selectWeek: 'Select Week (optional)',
+      allMonths: 'All Months', allWeeks: 'All Weeks',
+      pleaseSelectYear: 'Please select a year first'
     }
   }[lang];
 
@@ -131,10 +139,27 @@ const App = () => {
     }
   };
 
-  // Reporting rate computed data
+  // Reporting rate period options (available years / months / weeks from data)
+  const periodOptions = useMemo(
+    () => dataHelper.getReportingPeriodOptions(reportingData),
+    [reportingData]
+  );
+
+  // Auto-select latest year when data first loads
+  useEffect(() => {
+    if (periodOptions.years.length > 0 && !filterYear) {
+      const latestYear = periodOptions.years[periodOptions.years.length - 1];
+      setFilterYear(latestYear);
+    }
+  }, [periodOptions.years, filterYear]);
+
+  // Reset month/week when year changes
+  const handleYearChange = (y) => { setFilterYear(y); setFilterMonth(''); setFilterWeek(''); };
+  const handleMonthChange = (m) => { setFilterMonth(m); setFilterWeek(''); };
+
   const reportingRecords = useMemo(() =>
-    dataHelper.computeReportingRate(reportingData, reportingPeriod, Number(targetHours)),
-    [reportingData, reportingPeriod, targetHours]
+    dataHelper.computeReportingRate(reportingData, filterYear, filterMonth, filterWeek, Number(targetHours)),
+    [reportingData, filterYear, filterMonth, filterWeek, targetHours]
   );
 
   const reportingByDept = useMemo(() =>
@@ -165,7 +190,8 @@ const App = () => {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, t.reporting);
-    XLSX.writeFile(wb, `完整填报率_${reportingPeriod}_target${targetHours}h.xlsx`);
+    const periodLabel = filterWeek || filterMonth || filterYear || 'all';
+    XLSX.writeFile(wb, `完整填报率_${periodLabel}_target${targetHours}h.xlsx`);
   };
 
   const filteredData = useMemo(() => {
@@ -352,18 +378,53 @@ const App = () => {
           <div className="reporting-tab">
             <div className="reporting-header">
               <div className="reporting-controls">
-                <div className="period-toggle">
-                  <button className={reportingPeriod === 'weekly' ? 'active' : ''} onClick={() => setReportingPeriod('weekly')}>{t.period.weekly}</button>
-                  <button className={reportingPeriod === 'monthly' ? 'active' : ''} onClick={() => setReportingPeriod('monthly')}>{t.period.monthly}</button>
+                {/* Cascading filters: Year → Month → Week */}
+                <div className="reporting-filters">
+                  {/* Year */}
+                  <div className="filter-group">
+                    <label>{t.selectYear}</label>
+                    <select value={filterYear} onChange={e => handleYearChange(e.target.value)}>
+                      {periodOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Month (only if year selected) */}
+                  {filterYear && (
+                    <div className="filter-group">
+                      <label>{t.selectMonth}</label>
+                      <select value={filterMonth} onChange={e => handleMonthChange(e.target.value)}>
+                        <option value="">{t.allMonths}</option>
+                        {(periodOptions.monthsByYear[filterYear] || []).map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Week (only if year + month selected) */}
+                  {filterMonth && (
+                    <div className="filter-group">
+                      <label>{t.selectWeek}</label>
+                      <select value={filterWeek} onChange={e => setFilterWeek(e.target.value)}>
+                        <option value="">{t.allWeeks}</option>
+                        {(periodOptions.weeksByYearMonth[filterMonth] || []).map(w => (
+                          <option key={w} value={w}>{w}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
+
+                {/* Target hours input */}
                 <div className="target-input">
                   <label>{t.targetHours}</label>
-                  <input type="number" min="1" max="999" value={targetHours}
+                  <input type="number" min="1" max="9999" value={targetHours}
                     onChange={e => setTargetHours(e.target.value)}
                     className="hours-input" />
                   <span className="per-period">{t.perPeriod}</span>
                 </div>
               </div>
+
               {reportingRecords.length > 0 && (
                 <button className="export-btn" onClick={exportReportingExcel}>
                   <FileDown size={16} /> {t.export}

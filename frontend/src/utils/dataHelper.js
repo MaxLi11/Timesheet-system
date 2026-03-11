@@ -110,22 +110,79 @@ export const aggregateProjectData = (entries, period = 'monthly') => {
 };
 
 /**
- * Computes per-employee, per-period actual vs target hours.
+ * Extracts available years, months (for a given year), and weeks (for a given year+month)
+ * from raw reporting entries.
+ */
+export const getReportingPeriodOptions = (entries) => {
+    const years = new Set();
+    const monthsByYear = {};   // { '2026': Set(['2026-01', ...]) }
+    const weeksByYearMonth = {}; // { '2026-01': Set(['2026-W01', ...]) }
+
+    entries.forEach(entry => {
+        const d = dayjs(entry.start_date);
+        const year = String(d.year());
+        const month = d.format('YYYY-MM');
+        const week = `${d.year()}-W${String(d.week()).padStart(2, '0')}`;
+
+        years.add(year);
+
+        if (!monthsByYear[year]) monthsByYear[year] = new Set();
+        monthsByYear[year].add(month);
+
+        if (!weeksByYearMonth[month]) weeksByYearMonth[month] = new Set();
+        weeksByYearMonth[month].add(week);
+    });
+
+    return {
+        years: [...years].sort(),
+        monthsByYear: Object.fromEntries(
+            Object.entries(monthsByYear).map(([y, s]) => [y, [...s].sort()])
+        ),
+        weeksByYearMonth: Object.fromEntries(
+            Object.entries(weeksByYearMonth).map(([m, s]) => [m, [...s].sort()])
+        )
+    };
+};
+
+/**
+ * Computes per-employee actual vs target hours with hierarchical filtering.
  * Returns only records where gap != 0.
  * @param {Array} entries - Raw time entries from /reporting-rate
- * @param {string} period - 'weekly' | 'monthly'
- * @param {number} targetHours - User-provided target per period
- * @returns {Array} { period_key, department, employee_name, employee_id, actual_hours, gap }
+ * @param {string} filterYear  - Required: '2026'
+ * @param {string} filterMonth - Optional: '2026-03' (for monthly view)
+ * @param {string} filterWeek  - Optional: '2026-W10' (for weekly view within month)
+ * @param {number} targetHours - User-provided target
  */
-export const computeReportingRate = (entries, period, targetHours) => {
+export const computeReportingRate = (entries, filterYear, filterMonth, filterWeek, targetHours) => {
+    if (!filterYear) return [];
+
+    // Determine aggregation key and filter predicate
+    let getPeriodKey, passesFilter;
+
+    if (filterWeek) {
+        // Week-level: only entries within the selected week
+        getPeriodKey = (d) => `${d.year()}-W${String(d.week()).padStart(2, '0')}`;
+        passesFilter = (d) => {
+            const week = `${d.year()}-W${String(d.week()).padStart(2, '0')}`;
+            return week === filterWeek;
+        };
+    } else if (filterMonth) {
+        // Month-level: only entries within the selected month
+        getPeriodKey = (d) => d.format('YYYY-MM');
+        passesFilter = (d) => d.format('YYYY-MM') === filterMonth;
+    } else {
+        // Year-level: all entries within the selected year, aggregated by month
+        getPeriodKey = (d) => d.format('YYYY-MM');
+        passesFilter = (d) => String(d.year()) === filterYear;
+    }
+
     // Group by (period_key, employee_id)
     const map = {};
     entries.forEach(entry => {
         const d = dayjs(entry.start_date);
-        const periodKey = period === 'weekly'
-            ? `${d.year()}-W${String(d.week()).padStart(2, '0')}`
-            : d.format('YYYY-MM');
+        if (!passesFilter(d)) return;
 
+        const periodKey = getPeriodKey(d);
         const key = `${periodKey}___${entry.employee_id}`;
         if (!map[key]) {
             map[key] = {
@@ -139,17 +196,18 @@ export const computeReportingRate = (entries, period, targetHours) => {
         map[key].actual_hours += entry.hours;
     });
 
-    // Compute gap and filter out zeros
     return Object.values(map)
-        .map(r => ({ ...r, actual_hours: parseFloat(r.actual_hours.toFixed(2)), gap: parseFloat((targetHours - r.actual_hours).toFixed(2)) }))
+        .map(r => ({
+            ...r,
+            actual_hours: parseFloat(r.actual_hours.toFixed(2)),
+            gap: parseFloat((targetHours - r.actual_hours).toFixed(2))
+        }))
         .filter(r => r.gap !== 0)
         .sort((a, b) => a.period_key.localeCompare(b.period_key) || a.department.localeCompare(b.department));
 };
 
 /**
  * Groups computeReportingRate results by department.
- * @param {Array} records - Output of computeReportingRate
- * @returns {Object} { dept: [records] }
  */
 export const groupReportingByDept = (records) => {
     const groups = {};
@@ -158,7 +216,6 @@ export const groupReportingByDept = (records) => {
         groups[r.department].totalGap += r.gap;
         groups[r.department].employees.push(r);
     });
-    // Round summary gaps
     Object.values(groups).forEach(g => { g.totalGap = parseFloat(g.totalGap.toFixed(2)); });
     return groups;
 };
