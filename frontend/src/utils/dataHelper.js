@@ -66,32 +66,32 @@ export const prepareHeatmapData = (entries) => {
 /**
  * Aggregates data for multiple projects across a time period
  */
-export const aggregateProjectData = (entries, period = 'monthly') => {
-    const timeMap = {}; // { timeKey: { projectA: hours, projectB: hours } }
+export const aggregateProjectData = (data, periodType = 'monthly') => {
+    const timeMap = {}; // { '2026-03': { 'ProjectA': 15.5, 'ProjectB': 8 } }
     const projects = new Set();
 
-    entries.forEach(entry => {
-        const date = dayjs(entry.start_date);
-        let key = '';
+    data.forEach(item => {
+        if (!item.start_date || !item.project_name) return; // robust check
 
-        if (period === 'weekly') {
-            key = `${date.year()}-W${date.week()}`;
-        } else if (period === 'monthly') {
-            key = date.format('YYYY-MM');
-        } else if (period === 'quarterly') {
-            key = `${date.year()}-Q${date.quarter()}`;
+        const d = dayjs(item.start_date);
+        let timeKey = '';
+
+        if (periodType === 'weekly') {
+            timeKey = `${d.year()}-W${String(d.isoWeek()).padStart(2, '0')}`;
+        } else if (periodType === 'quarterly') {
+            const q = Math.ceil((d.month() + 1) / 3);
+            timeKey = `${d.year()}-Q${q}`;
         } else {
-            key = date.format('YYYY');
+            // default monthly
+            timeKey = d.format('YYYY-MM');
         }
 
-        const projName = entry.project_name || 'Unknown';
-        projects.add(projName);
-
-        if (!timeMap[key]) timeMap[key] = {};
-        if (!timeMap[key][projName]) timeMap[key][projName] = 0;
-        timeMap[key][projName] += entry.hours;
+        if (!timeMap[timeKey]) timeMap[timeKey] = {};
+        if (!timeMap[timeKey][item.project_name]) timeMap[timeKey][item.project_name] = 0;
+        
+        timeMap[timeKey][item.project_name] += (item.hours || 0);
+        projects.add(item.project_name);
     });
-
     const sortedLabels = Object.keys(timeMap).sort();
     const sortedProjects = [...projects].sort();
 
@@ -119,18 +119,29 @@ export const getReportingPeriodOptions = (entries) => {
     const weeksByYearMonth = {}; // { '2026-01': Set(['2026-W01', ...]) }
 
     entries.forEach(entry => {
+        if (!entry.start_date) return; // robustness check
+
         const d = dayjs(entry.start_date);
         const year = String(d.year());
-        const month = d.format('YYYY-MM');
-        const week = `${d.year()}-W${String(d.week()).padStart(2, '0')}`;
+        
+        let monthStr = String(d.month() + 1).padStart(2, '0');
+        // We'll store month just as the 2-digit string to match the UI dropdown expectation
+        
+        // Custom ISO week format
+        const weekStr = String(d.isoWeek()).padStart(2, '0');
 
         years.add(year);
 
         if (!monthsByYear[year]) monthsByYear[year] = new Set();
-        monthsByYear[year].add(month);
+        monthsByYear[year].add(monthStr);
 
-        if (!weeksByYearMonth[month]) weeksByYearMonth[month] = new Set();
-        weeksByYearMonth[month].add(week);
+        const yearMonth = `${year}-${monthStr}`;
+        if (!weeksByYearMonth[yearMonth]) weeksByYearMonth[yearMonth] = new Map();
+        
+        weeksByYearMonth[yearMonth].set(weekStr, {
+            week: weekStr,
+            label: `第${weekStr}周`
+        });
     });
 
     return {
