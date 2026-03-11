@@ -2,11 +2,28 @@ import pandas as pd
 from datetime import datetime
 import numpy as np
 
+def load_dept_mapping():
+    """
+    Loads department name mapping from 部门简称.xlsx
+    """
+    mapping_path = r"d:\Antigravity\Project-timesheet\部门简称.xlsx"
+    if not os.path.exists(mapping_path):
+        return {}
+    try:
+        # Read the mapping file (Sheet1 corresponds to what was seen)
+        mapping_df = pd.read_excel(mapping_path, sheet_name='Sheet1')
+        # Expecting columns '部门' and '部门简称'
+        return dict(zip(mapping_df['部门'].astype(str), mapping_df['部门简称'].astype(str)))
+    except Exception as e:
+        print(f"Warning: Failed to load department mapping: {e}")
+        return {}
+
 def parse_timesheet(file_path: str):
     """
     Parses the timesheet Excel file and returns a list of dictionaries for the DB.
     Handles duplicate '合计' columns (O for Projects, R for Non-Projects).
     """
+    dept_mapping = load_dept_mapping()
     try:
         # Read the first sheet
         df = pd.read_excel(file_path, sheet_name=0)
@@ -72,10 +89,14 @@ def parse_timesheet(file_path: str):
                 print(f"Row {index} date error: {de}")
                 continue 
 
+            # Apply department mapping
+            raw_dept = str(row['所属部门']).strip()
+            dept_name = dept_mapping.get(raw_dept, raw_dept)
+
             entry = {
                 "employee_name": str(row['员工']).strip(),
                 "employee_id": str(row['工号']).strip(),
-                "department": str(row['所属部门']).strip(),
+                "department": dept_name,
                 "project_name": display_name,
                 "category": category,
                 "start_date": start_date,
@@ -97,4 +118,4 @@ if __name__ == "__main__":
         results = parse_timesheet(test_path)
         print(f"Parsed {len(results)} rows successfully.")
         if results:
-            print("Sample data:", results[0])
+            print("Sample data (mapped dept):", results[0])
