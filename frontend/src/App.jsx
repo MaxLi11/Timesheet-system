@@ -23,11 +23,12 @@ const App = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  const [filters, setFilters] = useState({
-    period: 'monthly',
-    department: 'All',
-    project: 'All'
-  });
+  // Global Dashboard & Timeline filters
+  const [dashYear, setDashYear] = useState('');
+  const [dashMonth, setDashMonth] = useState('');
+  const [dashWeek, setDashWeek] = useState('');
+  const [dashSelectedDepts, setDashSelectedDepts] = useState(new Set());
+  const [dashSelectedProjects, setDashSelectedProjects] = useState(new Set());
   const [status, setStatus] = useState('checking'); // 'checking', 'connected', 'error'
   const [lang, setLang] = useState('zh'); // 'zh' or 'en'
   // Reporting Rate state
@@ -62,6 +63,7 @@ const App = () => {
       deficit: '不足', excess: '超出',
       selectYear: '选择年度', selectMonth: '选择月份', selectWeek: '选择周（可选）',
       allMonths: '全年', allWeeks: '全月',
+      filterDept: '选择部门（可多选）', allDepts: '全部部门',
       pleaseSelectYear: '请先选择年度',
       pendingApprover: '未操作者', pendingCount: '待审条数', pendingHours: '待审工时',
       noApprovalIssues: '当前筛选周期内没有待审批工时。',
@@ -85,6 +87,7 @@ const App = () => {
       deficit: 'Deficit', excess: 'Excess',
       selectYear: 'Select Year', selectMonth: 'Select Month', selectWeek: 'Select Week (optional)',
       allMonths: 'All Months', allWeeks: 'All Weeks',
+      filterDept: 'Filter Departments', allDepts: 'All Depts',
       pleaseSelectYear: 'Please select a year first',
       pendingApprover: 'Pending Approver', pendingCount: 'Pending Count', pendingHours: 'Pending Hours',
       noApprovalIssues: 'No pending approvals in the selected period.',
@@ -289,19 +292,83 @@ const App = () => {
     XLSX.writeFile(wb, `完整填报率_${periodLabel}_target${targetHours}h.xlsx`);
   };
 
+  const dashPeriodOptions = useMemo(() => dataHelper.getReportingPeriodOptions(data), [data]);
+
   const filteredData = useMemo(() => {
     return data.filter(item => {
-      const matchDept = filters.department === 'All' || item.department === filters.department;
-      const matchProj = filters.project === 'All' || item.project_name === filters.project;
-      return matchDept && matchProj;
-    });
-  }, [data, filters.department, filters.project]);
+      // 1. Time Filters
+      const itemDate = dayjs(item.start_date);
+      const y = itemDate.year().toString();
+      const m = (itemDate.month() + 1).toString().padStart(2, '0');
+      const w = itemDate.isoWeek().toString();
 
-  const departments = useMemo(() => ['All', ...new Set(data.map(i => i.department))], [data]);
-  const projects = useMemo(() => ['All', ...new Set(data.map(i => i.project_name))], [data]);
+      if (dashYear && y !== dashYear) return false;
+      if (dashMonth && m !== dashMonth) return false;
+      if (dashWeek && w !== dashWeek) return false;
+
+      // 2. Department & Project Multi-select Filters
+      if (dashSelectedDepts.size > 0 && !dashSelectedDepts.has(item.department)) return false;
+      if (dashSelectedProjects.size > 0 && !dashSelectedProjects.has(item.project_name)) return false;
+
+      return true;
+    });
+  }, [data, dashYear, dashMonth, dashWeek, dashSelectedDepts, dashSelectedProjects]);
+
+  const dashAvailableDepts = useMemo(() => {
+    // Determine available departments based on TIME filtered data only (so selecting a dept doesn't shrink the dept list)
+    const timeFiltered = data.filter(item => {
+      const itemDate = dayjs(item.start_date);
+      if (dashYear && itemDate.year().toString() !== dashYear) return false;
+      if (dashMonth && (itemDate.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
+      if (dashWeek && itemDate.isoWeek().toString() !== dashWeek) return false;
+      return true;
+    });
+    return Array.from(new Set(timeFiltered.map(i => i.department))).sort();
+  }, [data, dashYear, dashMonth, dashWeek]);
+
+  const dashAvailableProjects = useMemo(() => {
+    // Determine available projects based on TIME and DEPT filtered data
+    const preFiltered = data.filter(item => {
+      const itemDate = dayjs(item.start_date);
+      if (dashYear && itemDate.year().toString() !== dashYear) return false;
+      if (dashMonth && (itemDate.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
+      if (dashWeek && itemDate.isoWeek().toString() !== dashWeek) return false;
+      if (dashSelectedDepts.size > 0 && !dashSelectedDepts.has(item.department)) return false;
+      return true;
+    });
+    return Array.from(new Set(preFiltered.map(i => i.project_name))).sort();
+  }, [data, dashYear, dashMonth, dashWeek, dashSelectedDepts]);
+
+  const toggleDashDept = (dept) => {
+    setDashSelectedDepts(prev => {
+      const next = new Set(prev);
+      if (next.has(dept)) next.delete(dept); else next.add(dept);
+      return next;
+    });
+    // Optional: clear related project selections when changing dept, but letting user keep it is fine too
+  };
+
+  const toggleDashProject = (proj) => {
+    setDashSelectedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(proj)) next.delete(proj); else next.add(proj);
+      return next;
+    });
+  };
 
   const trendChartOpt = useMemo(() => {
-    const agg = dataHelper.aggregateProjectData(filteredData, filters.period);
+    // Determine aggregation dynamically based on what's selected
+    let aggType = 'monthly';
+    if (dashWeek) aggType = 'weekly';
+    else if (dashMonth) aggType = 'weekly';
+    else if (dashYear) aggType = 'monthly';
+    else aggType = 'quarterly'; // all data view
+
+    const agg = dataHelper.aggregateProjectData(filteredData, aggType);
+    // The structure of `agg` from dataHelper.aggregateProjectData is expected to be:
+    // { projects: [...], labels: [...], series: [...] }
+    // The instruction provided `const projNames = Object.keys(agg); const periods = Array.from(new Set(projNames.flatMap(p => Object.keys(agg[p])))).sort();`
+    // which suggests a different `agg` structure. Assuming the original `agg` structure is correct for ECharts.
     return {
       tooltip: { trigger: 'axis', backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#6366f1', textStyle: { color: '#fff' } },
       legend: { data: agg.projects, textStyle: { color: '#94a3b8' }, top: 0, type: 'scroll' },
@@ -436,19 +503,83 @@ const App = () => {
         )}
 
         {activeTab !== 'reporting' && activeTab !== 'approval' && (
-          <div className="filters-bar">
-            <div className="filter-label"><Filter size={16} /> {t.filters}</div>
-            <select value={filters.period} onChange={e => setFilters({ ...filters, period: e.target.value })}>
-              <option value="weekly">{t.period.weekly}</option>
-              <option value="monthly">{t.period.monthly}</option>
-              <option value="quarterly">{t.period.quarterly}</option>
-            </select>
-            <select value={filters.department} onChange={e => setFilters({ ...filters, department: e.target.value })}>
-              {departments.map(d => <option key={d} value={d}>{d === 'All' ? t.none : d}</option>)}
-            </select>
-            <select value={filters.project} onChange={e => setFilters({ ...filters, project: e.target.value })}>
-              {projects.map(p => <option key={p} value={p}>{p === 'All' ? t.none : p}</option>)}
-            </select>
+          <div className="reporting-tab" style={{ background: 'transparent', boxShadow: 'none', padding: 0 }}>
+            {/* Top controls: Period and action buttons could go here if needed */}
+            <div className="reporting-top-bar" style={{ marginBottom: dashAvailableDepts.length > 0 ? '0.5rem' : '1.5rem' }}>
+              <div className="reporting-filters">
+                <div className="filter-group">
+                  <label>{t.selectYear}</label>
+                  <select value={dashYear} onChange={e => { setDashYear(e.target.value); setDashMonth(''); setDashWeek(''); }}>
+                    <option value="">{t.allMonths}</option>
+                    {dashPeriodOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+
+                {dashYear && (
+                  <div className="filter-group">
+                    <label>{t.selectMonth}</label>
+                    <select value={dashMonth} onChange={e => { setDashMonth(e.target.value); setDashWeek(''); }}>
+                      <option value="">{t.allMonths}</option>
+                      {(dashPeriodOptions.monthsByYear[dashYear] || []).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {dashMonth && (
+                  <div className="filter-group">
+                    <label>{t.selectWeek}</label>
+                    <select value={dashWeek} onChange={e => setDashWeek(e.target.value)}>
+                      <option value="">{t.allWeeks}</option>
+                      {(dashPeriodOptions.weeksByMonth[`${dashYear}-${dashMonth}`] || []).map(w => (
+                        <option key={w.week} value={w.week}>{w.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Department Multi-select panel */}
+            <div className="approval-project-panel" style={{ marginBottom: '0.5rem' }}>
+              <div className="project-panel-header">
+                <span className="filter-group-label">{t.filterDept}</span>
+                <div className="project-panel-btns">
+                  <button onClick={() => setDashSelectedDepts(new Set(dashAvailableDepts))}>{t.selectAll || '全选'}</button>
+                  <button onClick={() => setDashSelectedDepts(new Set())}>{t.clearAll || '清空'}</button>
+                </div>
+              </div>
+              <div className="project-checkboxes">
+                {dashAvailableDepts.map(dept => (
+                  <label key={dept} className={`project-chip ${dashSelectedDepts.has(dept) ? 'selected' : ''}`}>
+                    <input type="checkbox" checked={dashSelectedDepts.has(dept)} onChange={() => toggleDashDept(dept)} />
+                    {dept}
+                  </label>
+                ))}
+                {dashAvailableDepts.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无部门数据</span>}
+              </div>
+            </div>
+
+            {/* Project Multi-select panel */}
+            <div className="approval-project-panel" style={{ marginBottom: '1.5rem' }}>
+              <div className="project-panel-header">
+                <span className="filter-group-label">{t.filterProject}</span>
+                <div className="project-panel-btns">
+                  <button onClick={() => setDashSelectedProjects(new Set(dashAvailableProjects))}>{t.selectAll || '全选'}</button>
+                  <button onClick={() => setDashSelectedProjects(new Set())}>{t.clearAll || '清空'}</button>
+                </div>
+              </div>
+              <div className="project-checkboxes">
+                {dashAvailableProjects.map(proj => (
+                  <label key={proj} className={`project-chip ${dashSelectedProjects.has(proj) ? 'selected' : ''}`}>
+                    <input type="checkbox" checked={dashSelectedProjects.has(proj)} onChange={() => toggleDashProject(proj)} />
+                    {proj}
+                  </label>
+                ))}
+                {dashAvailableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
+              </div>
+            </div>
           </div>
         )}
 
