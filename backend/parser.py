@@ -2,13 +2,33 @@ import pandas as pd
 from datetime import datetime
 import numpy as np
 
-_DEPT_MAPPING_CACHE = {}
+# Default mapping embedded in the code so the Excel file is optional
+DEFAULT_DEPT_MAPPING = {
+    "110.1 R&D - Digital": "Digital",
+    "110.2 R&D - Digital": "Digital",
+    "110 R&D - Digital": "Digital",
+    "130.1 R&D - System Eng AE": "AE",
+    "130.2 R&D - System Eng AE": "AE",
+    "130 R&D - Engineering Support": "AE",
+    "135.1 R&D - Technology Innovation Lab": "TIL",
+    "105.1 R&D - Analog": "Analog",
+    "105.2 R&D - Analog": "Analog",
+    "105.1 R&D Analog": "Analog",
+    "115.1 R&D - Layout": "Layout",
+    "115.2 R&D - Layout": "Layout",
+    "115 R&D - Layout": "Layout",
+    "120 R&D - Test": "Test",
+    "125 R&D - System Eng SW": "SW",
+    "125.2 R&D - System Eng SW": "SW"
+}
+
+_DEPT_MAPPING_CACHE = DEFAULT_DEPT_MAPPING.copy()
 _LAST_MAPPING_MTIME = 0
 
 def load_dept_mapping():
     """
     Loads department name mapping from 部门简称.xlsx with caching.
-    Only reloads if the file has been modified.
+    Uses DEFAULT_DEPT_MAPPING as the base.
     """
     global _DEPT_MAPPING_CACHE, _LAST_MAPPING_MTIME
     mapping_path = r"d:\Antigravity\Project-timesheet\部门简称.xlsx"
@@ -18,10 +38,13 @@ def load_dept_mapping():
 
     try:
         current_mtime = os.path.getmtime(mapping_path)
-        # Only read the file if it's new or modified
         if current_mtime > _LAST_MAPPING_MTIME:
             mapping_df = pd.read_excel(mapping_path, sheet_name='Sheet1')
-            _DEPT_MAPPING_CACHE = dict(zip(mapping_df['部门'].astype(str), mapping_df['部门简称'].astype(str)))
+            file_mapping = dict(zip(mapping_df['部门'].astype(str), mapping_df['部门简称'].astype(str)))
+            # Merge: Default mapping + File mapping (File takes precedence)
+            combined = DEFAULT_DEPT_MAPPING.copy()
+            combined.update(file_mapping)
+            _DEPT_MAPPING_CACHE = combined
             _LAST_MAPPING_MTIME = current_mtime
             print(f"DEBUG: Department mapping reloaded (mtime: {current_mtime})")
     except Exception as e:
