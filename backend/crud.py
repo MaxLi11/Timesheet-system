@@ -80,8 +80,8 @@ def get_reporting_rate(db: Session):
             "hours": e.hours
         }
         for e in entries
-        # Exclude '未提交' (Not Submitted) – value is '未提交 Not Submitted'
-        if not (e.approval_status or '').strip().startswith('\u672a\u63d0\u4ea4')
+        # Exclude '未提交 Not Submitted' entries (exact match)
+        if (e.approval_status or '').strip() != '未提交 Not Submitted'
     ]
 
 def get_approval_rate(db: Session):
