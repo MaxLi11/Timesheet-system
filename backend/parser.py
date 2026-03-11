@@ -20,7 +20,8 @@ DEFAULT_DEPT_MAPPING = {
     "115 R&D - Layout": "Layout",
     "120 R&D - Test": "Test",
     "125 R&D - System Eng SW": "SW",
-    "125.2 R&D - System Eng SW": "SW"
+    "125.2 R&D - System Eng SW": "SW",
+    "135.2 R&D - Product Marketing": "PM"
 }
 
 _DEPT_MAPPING_CACHE = DEFAULT_DEPT_MAPPING.copy()
