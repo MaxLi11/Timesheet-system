@@ -622,8 +622,8 @@ const App = () => {
                     <label>{t.selectWeek}</label>
                     <select value={filterWeek} onChange={e => setFilterWeek(e.target.value)}>
                       <option value="">{t.allWeeks}</option>
-                      {(periodOptions.weeksByYearMonth[filterMonth] || []).map(w => (
-                        <option key={w} value={w}>{w}</option>
+                      {(periodOptions.weeksByMonth[`${filterYear}-${filterMonth}`] || []).map(w => (
+                        <option key={w.week} value={w.week}>{w.label}</option>
                       ))}
                     </select>
                   </div>

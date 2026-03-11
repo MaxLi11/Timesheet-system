@@ -115,33 +115,25 @@ export const aggregateProjectData = (data, periodType = 'monthly') => {
  */
 export const getReportingPeriodOptions = (entries) => {
     const years = new Set();
-    const monthsByYear = {};   // { '2026': Set(['2026-01', ...]) }
-    const weeksByYearMonth = {}; // { '2026-01': Set(['2026-W01', ...]) }
+    const monthsByYear = {};   // { '2026': ['01','02',...] }
+    const weeksByMonth = {};   // { '2026-01': [{week:'01', label:'第01周'}, ...] }
 
     entries.forEach(entry => {
-        if (!entry.start_date) return; // robustness check
+        if (!entry.start_date) return;
 
         const d = dayjs(entry.start_date);
         const year = String(d.year());
-        
-        let monthStr = String(d.month() + 1).padStart(2, '0');
-        // We'll store month just as the 2-digit string to match the UI dropdown expectation
-        
-        // Custom ISO week format
-        const weekStr = String(d.isoWeek()).padStart(2, '0');
+        const monthNum = String(d.month() + 1).padStart(2, '0');
+        const weekNum = String(d.isoWeek()).padStart(2, '0');
+        const ymKey = `${year}-${monthNum}`;
 
         years.add(year);
 
         if (!monthsByYear[year]) monthsByYear[year] = new Set();
-        monthsByYear[year].add(monthStr);
+        monthsByYear[year].add(monthNum);
 
-        const yearMonth = `${year}-${monthStr}`;
-        if (!weeksByYearMonth[yearMonth]) weeksByYearMonth[yearMonth] = new Map();
-        
-        weeksByYearMonth[yearMonth].set(weekStr, {
-            week: weekStr,
-            label: `第${weekStr}周`
-        });
+        if (!weeksByMonth[ymKey]) weeksByMonth[ymKey] = new Map();
+        weeksByMonth[ymKey].set(weekNum, { week: weekNum, label: `第${weekNum}周` });
     });
 
     return {
@@ -149,8 +141,11 @@ export const getReportingPeriodOptions = (entries) => {
         monthsByYear: Object.fromEntries(
             Object.entries(monthsByYear).map(([y, s]) => [y, [...s].sort()])
         ),
-        weeksByYearMonth: Object.fromEntries(
-            Object.entries(weeksByYearMonth).map(([m, s]) => [m, [...s].sort()])
+        weeksByMonth: Object.fromEntries(
+            Object.entries(weeksByMonth).map(([m, map]) => [
+                m,
+                [...map.values()].sort((a, b) => a.week.localeCompare(b.week))
+            ])
         )
     };
 };
