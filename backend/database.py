@@ -36,6 +36,8 @@ class TimeEntry(Base):
     hours = Column(Float)
     task_details = Column(String)
     approval_status = Column(String)
+    current_node = Column(String)    # T col: 当前节点 (e.g. 'Get Approval', 'PL Review', 'Close')
+    pending_approver = Column(String) # U col: 未操作者
 
 def init_db():
     Base.metadata.create_all(bind=engine)

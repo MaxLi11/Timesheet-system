@@ -109,3 +109,11 @@ def get_reporting_rate(db: Session = Depends(get_db)):
     so we can reuse the same logic per period and target hours.
     """
     return crud.get_reporting_rate(db)
+
+@app.get("/approval-rate")
+def get_approval_rate(db: Session = Depends(get_db)):
+    """
+    Returns time entries where current_node is not 'Close' or 'Prepare',
+    i.e. entries pending approval. Used for the Approval Completion Rate feature.
+    """
+    return crud.get_approval_rate(db)

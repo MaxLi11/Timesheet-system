@@ -219,3 +219,44 @@ export const groupReportingByDept = (records) => {
     Object.values(groups).forEach(g => { g.totalGap = parseFloat(g.totalGap.toFixed(2)); });
     return groups;
 };
+
+/**
+ * Computes pending approval statistics from raw /approval-rate entries.
+ * Groups by pending_approver + period (year or year+month), returning
+ * per-person counts and total hours.
+ *
+ * @param {Array}  entries     - Raw data from /approval-rate endpoint
+ * @param {string} filterYear  - Required
+ * @param {string} filterMonth - Optional (e.g. '2026-03')
+ * @returns {Array} sorted by dept then pending_approver
+ */
+export const computeApprovalRate = (entries, filterYear, filterMonth) => {
+    if (!filterYear) return [];
+
+    const map = {};
+    entries.forEach(entry => {
+        const d = dayjs(entry.start_date);
+        const year = String(d.year());
+        const month = d.format('YYYY-MM');
+
+        if (year !== filterYear) return;
+        if (filterMonth && month !== filterMonth) return;
+
+        const approver = (entry.pending_approver || '').trim() || '（未知）';
+        const key = `${approver}`;
+        if (!map[key]) {
+            map[key] = {
+                pending_approver: approver,
+                department: entry.department,
+                count: 0,
+                total_hours: 0
+            };
+        }
+        map[key].count += 1;
+        map[key].total_hours += entry.hours;
+    });
+
+    return Object.values(map)
+        .map(r => ({ ...r, total_hours: parseFloat(r.total_hours.toFixed(2)) }))
+        .sort((a, b) => a.department.localeCompare(b.department) || a.pending_approver.localeCompare(b.pending_approver));
+};

@@ -154,7 +154,9 @@ def parse_timesheet(file_path: str):
                 "end_date": end_date,
                 "hours": float(hours_val),
                 "task_details": str(row.get('任务详情', '')).strip(),
-                "approval_status": str(row.get('核准状态', '')).strip()
+                "approval_status": str(row.get('核准状态', '')).strip(),
+                "current_node": str(row.get('当前节点', '') or '').strip(),
+                "pending_approver": str(row.get('未操作者', '') or '').strip()
             }
             data_rows.append(entry)
             

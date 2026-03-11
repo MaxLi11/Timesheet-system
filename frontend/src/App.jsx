@@ -11,7 +11,8 @@ import {
   ChevronDown,
   ChevronRight,
   FileDown,
-  ClipboardCheck
+  ClipboardCheck,
+  CheckCircle2
 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import dayjs from 'dayjs';
@@ -36,13 +37,18 @@ const App = () => {
   const [filterMonth, setFilterMonth] = useState('');
   const [filterWeek, setFilterWeek] = useState('');
   const [expandedDepts, setExpandedDepts] = useState(new Set());
+  // Approval Rate state
+  const [approvalData, setApprovalData] = useState([]);
+  const [approvalYear, setApprovalYear] = useState('');
+  const [approvalMonth, setApprovalMonth] = useState('');
 
   const t = {
     zh: {
       dashboard: '仪表盘', stats: '统计分析', timeline: '项目时间轴', activity: '活跃度',
-      reporting: '完整填报率',
+      reporting: '完整填报率', approval: '审批完成率',
       title: '工时洞察', subtitle: '实时的工时统计与分析', sync: '同步数据', filters: '筛选:',
       reportingTitle: '完整填报率', reportingSubtitle: '筛选工时填报差异信息',
+      approvalTitle: '审批完成率', approvalSubtitle: '统计待审批工时信息',
       period: { weekly: '周统计', monthly: '月统计', quarterly: '季度统计' },
       totalHours: '总工时', avgProject: '项目平均', dataPoints: '数据点',
       trendTitle: '工时走势', distTitle: '项目分布', heatmapTitle: '活跃热力图', ganttTitle: '项目时间明细',
@@ -54,13 +60,16 @@ const App = () => {
       deficit: '不足', excess: '超出',
       selectYear: '选择年度', selectMonth: '选择月份', selectWeek: '选择周（可选）',
       allMonths: '全年', allWeeks: '全月',
-      pleaseSelectYear: '请先选择年度'
+      pleaseSelectYear: '请先选择年度',
+      pendingApprover: '未操作者', pendingCount: '待审条数', pendingHours: '待审工时',
+      noApprovalIssues: '当前筛选周期内没有待审批工时。'
     },
     en: {
       dashboard: 'Dashboard', stats: 'Statistics', timeline: 'Timeline', activity: 'Activity',
-      reporting: 'Reporting Rate',
+      reporting: 'Reporting Rate', approval: 'Approval Rate',
       title: 'Timesheet Insights', subtitle: 'Real-time statistics and analysis', sync: 'Sync Data', filters: 'Filters:',
       reportingTitle: 'Reporting Rate', reportingSubtitle: 'Filter timesheet reporting discrepancy information',
+      approvalTitle: 'Approval Completion Rate', approvalSubtitle: 'View pending approval timesheet entries',
       period: { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly' },
       totalHours: 'Total Hours', avgProject: 'Avg. per Project', dataPoints: 'Data Points',
       trendTitle: 'Hours Trend', distTitle: 'Project Distribution', heatmapTitle: 'Activity Heatmap', ganttTitle: 'Project Timeline',
@@ -72,7 +81,9 @@ const App = () => {
       deficit: 'Deficit', excess: 'Excess',
       selectYear: 'Select Year', selectMonth: 'Select Month', selectWeek: 'Select Week (optional)',
       allMonths: 'All Months', allWeeks: 'All Weeks',
-      pleaseSelectYear: 'Please select a year first'
+      pleaseSelectYear: 'Please select a year first',
+      pendingApprover: 'Pending Approver', pendingCount: 'Pending Count', pendingHours: 'Pending Hours',
+      noApprovalIssues: 'No pending approvals in the selected period.'
     }
   }[lang];
 
@@ -97,6 +108,17 @@ const App = () => {
     }
   }, []);
 
+  const fetchApprovalData = useCallback(async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/approval-rate');
+      if (!res.ok) return;
+      const json = await res.json();
+      setApprovalData(json);
+    } catch (err) {
+      console.error('Failed to fetch approval data:', err);
+    }
+  }, []);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -117,9 +139,10 @@ const App = () => {
     checkConnection();
     fetchData();
     fetchReportingData();
+    fetchApprovalData();
     const interval = setInterval(checkConnection, 5000);
     return () => clearInterval(interval);
-  }, [fetchReportingData]);
+  }, [fetchReportingData, fetchApprovalData]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -134,6 +157,7 @@ const App = () => {
       alert(`${t.success} ${result.rows_processed} rows.`);
       fetchData();
       fetchReportingData();
+      fetchApprovalData();
     } catch (err) {
       alert(`${t.uploadFailed}: ${err.message}`);
     } finally {
@@ -168,6 +192,48 @@ const App = () => {
     dataHelper.groupReportingByDept(reportingRecords),
     [reportingRecords]
   );
+
+  // Approval Rate computed
+  const approvalYears = useMemo(() => {
+    const years = new Set();
+    approvalData.forEach(e => years.add(String(dayjs(e.start_date).year())));
+    return [...years].sort();
+  }, [approvalData]);
+
+  const approvalMonths = useMemo(() => {
+    if (!approvalYear) return [];
+    const months = new Set();
+    approvalData.forEach(e => {
+      const d = dayjs(e.start_date);
+      if (String(d.year()) === approvalYear) months.add(d.format('YYYY-MM'));
+    });
+    return [...months].sort();
+  }, [approvalData, approvalYear]);
+
+  // Auto-select latest year for approval
+  useEffect(() => {
+    if (approvalYears.length > 0 && !approvalYear)
+      setApprovalYear(approvalYears[approvalYears.length - 1]);
+  }, [approvalYears, approvalYear]);
+
+  const approvalRecords = useMemo(() =>
+    dataHelper.computeApprovalRate(approvalData, approvalYear, approvalMonth),
+    [approvalData, approvalYear, approvalMonth]
+  );
+
+  const exportApprovalExcel = () => {
+    const rows = approvalRecords.map(r => ({
+      [t.dept]: r.department,
+      [t.pendingApprover]: r.pending_approver,
+      [t.pendingCount]: r.count,
+      [t.pendingHours]: r.total_hours
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, t.approval);
+    const periodLabel = approvalMonth || approvalYear || 'all';
+    XLSX.writeFile(wb, `审批完成率_${periodLabel}.xlsx`);
+  };
 
   const toggleDept = (dept) => {
     setExpandedDepts(prev => {
@@ -301,6 +367,7 @@ const App = () => {
           <div className={`nav-item ${activeTab === 'gantt' ? 'active' : ''}`} onClick={() => setActiveTab('gantt')}><Users size={20} /> {t.timeline}</div>
           <div className={`nav-item ${activeTab === 'heatmap' ? 'active' : ''}`} onClick={() => setActiveTab('heatmap')}><Calendar size={20} /> {t.activity}</div>
           <div className={`nav-item ${activeTab === 'reporting' ? 'active' : ''}`} onClick={() => setActiveTab('reporting')}><ClipboardCheck size={20} /> {t.reporting}</div>
+          <div className={`nav-item ${activeTab === 'approval' ? 'active' : ''}`} onClick={() => setActiveTab('approval')}><CheckCircle2 size={20} /> {t.approval}</div>
         </nav>
 
         <div className="sidebar-footer">
@@ -333,13 +400,17 @@ const App = () => {
       <main className="main-content">
         <header className="header">
           <div>
-            <h1>{activeTab === 'reporting' ? t.reportingTitle : t.title}</h1>
-            <p className="subtitle">{activeTab === 'reporting' ? t.reportingSubtitle : t.subtitle}</p>
+            <h1>{activeTab === 'reporting' ? t.reportingTitle : activeTab === 'approval' ? t.approvalTitle : t.title}</h1>
+            <p className="subtitle">{activeTab === 'reporting' ? t.reportingSubtitle : activeTab === 'approval' ? t.approvalSubtitle : t.subtitle}</p>
           </div>
           <button onClick={fetchData} className="refresh-btn"><RefreshCcw size={16} /> {t.sync}</button>
         </header>
 
-        {activeTab !== 'reporting' && (
+        {(activeTab === 'reporting' || activeTab === 'approval') && (
+          <div className="filters-bar" style={{ display: 'none' }} />
+        )}
+
+        {activeTab !== 'reporting' && activeTab !== 'approval' && (
           <div className="filters-bar">
             <div className="filter-label"><Filter size={16} /> {t.filters}</div>
             <select value={filters.period} onChange={e => setFilters({ ...filters, period: e.target.value })}>
@@ -477,6 +548,66 @@ const App = () => {
                   )}
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {activeTab === 'approval' && (
+          <div className="reporting-tab">
+            <div className="reporting-top-bar">
+              <div className="reporting-filters">
+                <div className="filter-group">
+                  <label>{t.selectYear}</label>
+                  <select value={approvalYear} onChange={e => { setApprovalYear(e.target.value); setApprovalMonth(''); }}>
+                    {approvalYears.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                {approvalYear && (
+                  <div className="filter-group">
+                    <label>{t.selectMonth}</label>
+                    <select value={approvalMonth} onChange={e => setApprovalMonth(e.target.value)}>
+                      <option value="">{t.allMonths}</option>
+                      {approvalMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+              <div className="reporting-actions">
+                {approvalRecords.length > 0 && (
+                  <button className="export-btn" onClick={exportApprovalExcel}>
+                    <FileDown size={16} /> {t.export}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {approvalRecords.length === 0 ? (
+              <div className="card no-issues">{t.noApprovalIssues}</div>
+            ) : (
+              <div className="dept-accordion">
+                <div className="emp-table-wrap">
+                  <table className="emp-table">
+                    <thead>
+                      <tr>
+                        <th>{t.dept}</th>
+                        <th>{t.pendingApprover}</th>
+                        <th>{t.pendingCount}</th>
+                        <th>{t.pendingHours}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {approvalRecords.map((r, i) => (
+                        <tr key={i}>
+                          <td>{r.department}</td>
+                          <td>{r.pending_approver}</td>
+                          <td style={{ color: '#f59e0b', fontWeight: 700 }}>{r.count}</td>
+                          <td style={{ color: '#ef4444', fontWeight: 700 }}>{r.total_hours}h</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </div>
         )}

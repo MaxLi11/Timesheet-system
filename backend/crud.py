@@ -75,3 +75,36 @@ def get_reporting_rate(db: Session):
         }
         for e in entries
     ]
+
+def get_approval_rate(db: Session):
+    """
+    Returns time entries where current_node is NOT 'Close' (case-insensitive)
+    and NOT 'Prepare', representing entries pending approval.
+    """
+    excluded = {'close', 'prepare'}
+    entries = db.query(
+        database.TimeEntry.start_date,
+        database.TimeEntry.end_date,
+        database.TimeEntry.employee_name,
+        database.TimeEntry.department,
+        database.TimeEntry.hours,
+        database.TimeEntry.current_node,
+        database.TimeEntry.pending_approver,
+        database.TimeEntry.project_name
+    ).all()
+
+    result = []
+    for e in entries:
+        node = (e.current_node or '').strip().lower()
+        if node and node not in excluded:
+            result.append({
+                "start_date": str(e.start_date),
+                "end_date": str(e.end_date),
+                "employee_name": e.employee_name,
+                "department": e.department,
+                "hours": e.hours,
+                "current_node": e.current_node,
+                "pending_approver": e.pending_approver or '',
+                "project_name": e.project_name
+            })
+    return result
