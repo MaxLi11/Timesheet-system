@@ -15,6 +15,14 @@ import dayjs from 'dayjs';
 import * as dataHelper from './utils/dataHelper';
 
 const App = () => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [filters, setFilters] = useState({
+    period: 'monthly',
+    department: 'All',
+    project: 'All'
+  });
   const [status, setStatus] = useState('checking'); // 'checking', 'connected', 'error'
 
   const checkConnection = async () => {
