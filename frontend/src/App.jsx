@@ -31,6 +31,8 @@ const App = () => {
   const [dashWeek, setDashWeek] = useState('');
   const [dashSelectedDepts, setDashSelectedDepts] = useState(new Set());
   const [dashSelectedProjects, setDashSelectedProjects] = useState(new Set());
+  const [dashDeptOpen, setDashDeptOpen] = useState(false);
+  const [dashProjOpen, setDashProjOpen] = useState(false);
   const [status, setStatus] = useState('checking'); // 'checking', 'connected', 'error'
   const [lang, setLang] = useState('zh'); // 'zh' or 'en'
   // Reporting Rate state
@@ -546,44 +548,74 @@ const App = () => {
               </div>
             </div>
 
-            {/* Department Multi-select panel */}
-            <div className="approval-project-panel" style={{ marginBottom: '0.5rem' }}>
-              <div className="project-panel-header">
-                <span className="filter-group-label">{t.filterDept}</span>
-                <div className="project-panel-btns">
-                  <button onClick={() => setDashSelectedDepts(new Set(dashAvailableDepts))}>{t.selectAll || '全选'}</button>
-                  <button onClick={() => setDashSelectedDepts(new Set())}>{t.clearAll || '清空'}</button>
-                </div>
-              </div>
-              <div className="project-checkboxes">
-                {dashAvailableDepts.map(dept => (
-                  <label key={dept} className={`project-chip ${dashSelectedDepts.has(dept) ? 'selected' : ''}`}>
-                    <input type="checkbox" checked={dashSelectedDepts.has(dept)} onChange={() => toggleDashDept(dept)} />
-                    {dept}
-                  </label>
-                ))}
-                {dashAvailableDepts.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无部门数据</span>}
-              </div>
+            {/* Department Multi-select Dropdown */}
+            <div className="filter-group dropdown-container" style={{ margin: '0 0.5rem' }}>
+              <label>{t.filterDept}</label>
+              <button 
+                className="dropdown-button" 
+                onClick={() => { setDashDeptOpen(!dashDeptOpen); setDashProjOpen(false); }}
+              >
+                {dashSelectedDepts.size === 0 ? (t.allDepts || '全部部门') : `已选择 ${dashSelectedDepts.size} 项`}
+                <ChevronDown size={16} />
+              </button>
+              {dashDeptOpen && (
+                <>
+                  <div className="dropdown-overlay" onClick={() => setDashDeptOpen(false)} />
+                  <div className="approval-project-panel">
+                    <div className="project-panel-header">
+                      <span className="filter-group-label">{t.filterDept}</span>
+                      <div className="project-panel-btns">
+                        <button onClick={() => setDashSelectedDepts(new Set(dashAvailableDepts))}>{t.selectAll || '全选'}</button>
+                        <button onClick={() => setDashSelectedDepts(new Set())}>{t.clearAll || '清空'}</button>
+                      </div>
+                    </div>
+                    <div className="project-checkboxes">
+                      {dashAvailableDepts.map(dept => (
+                        <label key={dept} className={`project-chip ${dashSelectedDepts.has(dept) ? 'selected' : ''}`}>
+                          <input type="checkbox" checked={dashSelectedDepts.has(dept)} onChange={() => toggleDashDept(dept)} />
+                          {dept}
+                        </label>
+                      ))}
+                      {dashAvailableDepts.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无部门数据</span>}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* Project Multi-select panel */}
-            <div className="approval-project-panel" style={{ marginBottom: '1.5rem' }}>
-              <div className="project-panel-header">
-                <span className="filter-group-label">{t.filterProject}</span>
-                <div className="project-panel-btns">
-                  <button onClick={() => setDashSelectedProjects(new Set(dashAvailableProjects))}>{t.selectAll || '全选'}</button>
-                  <button onClick={() => setDashSelectedProjects(new Set())}>{t.clearAll || '清空'}</button>
-                </div>
-              </div>
-              <div className="project-checkboxes">
-                {dashAvailableProjects.map(proj => (
-                  <label key={proj} className={`project-chip ${dashSelectedProjects.has(proj) ? 'selected' : ''}`}>
-                    <input type="checkbox" checked={dashSelectedProjects.has(proj)} onChange={() => toggleDashProject(proj)} />
-                    {proj}
-                  </label>
-                ))}
-                {dashAvailableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
-              </div>
+            {/* Project Multi-select Dropdown */}
+            <div className="filter-group dropdown-container" style={{ margin: '0 0.5rem' }}>
+              <label>{t.filterProject}</label>
+              <button 
+                className="dropdown-button" 
+                onClick={() => { setDashProjOpen(!dashProjOpen); setDashDeptOpen(false); }}
+              >
+                {dashSelectedProjects.size === 0 ? (t.allProjects || '全部项目') : `已选择 ${dashSelectedProjects.size} 项`}
+                <ChevronDown size={16} />
+              </button>
+              {dashProjOpen && (
+                <>
+                  <div className="dropdown-overlay" onClick={() => setDashProjOpen(false)} />
+                  <div className="approval-project-panel">
+                    <div className="project-panel-header">
+                      <span className="filter-group-label">{t.filterProject}</span>
+                      <div className="project-panel-btns">
+                        <button onClick={() => setDashSelectedProjects(new Set(dashAvailableProjects))}>{t.selectAll || '全选'}</button>
+                        <button onClick={() => setDashSelectedProjects(new Set())}>{t.clearAll || '清空'}</button>
+                      </div>
+                    </div>
+                    <div className="project-checkboxes">
+                      {dashAvailableProjects.map(proj => (
+                        <label key={proj} className={`project-chip ${dashSelectedProjects.has(proj) ? 'selected' : ''}`}>
+                          <input type="checkbox" checked={dashSelectedProjects.has(proj)} onChange={() => toggleDashProject(proj)} />
+                          {proj}
+                        </label>
+                      ))}
+                      {dashAvailableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

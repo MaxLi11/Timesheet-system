@@ -456,6 +456,38 @@ button:hover {
   font-size: 1rem;
 }
 
+/* ── Dropdown Controls ───────────────────────────────────────── */
+.dropdown-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.dropdown-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  min-width: 180px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+}
+
+.dropdown-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dropdown-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 90;
+}
+
 /* ── Approval Rate: project multi-select panel ───────────────────── */
 .approval-project-panel {
   background: var(--glass);
@@ -463,6 +495,19 @@ button:hover {
   border-radius: 14px;
   padding: 1rem 1.2rem;
   margin-top: 0.5rem;
+}
+
+.dropdown-container .approval-project-panel {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 420px;
+  z-index: 100;
+  margin-top: 0;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  background: rgba(15, 23, 42, 0.98);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.15);
 }
 
 .project-panel-header {
