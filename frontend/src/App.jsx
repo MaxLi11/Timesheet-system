@@ -42,6 +42,7 @@ const App = () => {
       dashboard: '仪表盘', stats: '统计分析', timeline: '项目时间轴', activity: '活跃度',
       reporting: '完整填报率',
       title: '工时洞察', subtitle: '实时的工时统计与分析', sync: '同步数据', filters: '筛选:',
+      reportingTitle: '完整填报率', reportingSubtitle: '筛选工时填报差异信息',
       period: { weekly: '周统计', monthly: '月统计', quarterly: '季度统计' },
       totalHours: '总工时', avgProject: '项目平均', dataPoints: '数据点',
       trendTitle: '工时走势', distTitle: '项目分布', heatmapTitle: '活跃热力图', ganttTitle: '项目时间明细',
@@ -59,6 +60,7 @@ const App = () => {
       dashboard: 'Dashboard', stats: 'Statistics', timeline: 'Timeline', activity: 'Activity',
       reporting: 'Reporting Rate',
       title: 'Timesheet Insights', subtitle: 'Real-time statistics and analysis', sync: 'Sync Data', filters: 'Filters:',
+      reportingTitle: 'Reporting Rate', reportingSubtitle: 'Filter timesheet reporting discrepancy information',
       period: { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly' },
       totalHours: 'Total Hours', avgProject: 'Avg. per Project', dataPoints: 'Data Points',
       trendTitle: 'Hours Trend', distTitle: 'Project Distribution', heatmapTitle: 'Activity Heatmap', ganttTitle: 'Project Timeline',
@@ -331,26 +333,28 @@ const App = () => {
       <main className="main-content">
         <header className="header">
           <div>
-            <h1>{t.title}</h1>
-            <p className="subtitle">{t.subtitle}</p>
+            <h1>{activeTab === 'reporting' ? t.reportingTitle : t.title}</h1>
+            <p className="subtitle">{activeTab === 'reporting' ? t.reportingSubtitle : t.subtitle}</p>
           </div>
           <button onClick={fetchData} className="refresh-btn"><RefreshCcw size={16} /> {t.sync}</button>
         </header>
 
-        <div className="filters-bar">
-          <div className="filter-label"><Filter size={16} /> {t.filters}</div>
-          <select value={filters.period} onChange={e => setFilters({ ...filters, period: e.target.value })}>
-            <option value="weekly">{t.period.weekly}</option>
-            <option value="monthly">{t.period.monthly}</option>
-            <option value="quarterly">{t.period.quarterly}</option>
-          </select>
-          <select value={filters.department} onChange={e => setFilters({ ...filters, department: e.target.value })}>
-            {departments.map(d => <option key={d} value={d}>{d === 'All' ? t.none : d}</option>)}
-          </select>
-          <select value={filters.project} onChange={e => setFilters({ ...filters, project: e.target.value })}>
-            {projects.map(p => <option key={p} value={p}>{p === 'All' ? t.none : p}</option>)}
-          </select>
-        </div>
+        {activeTab !== 'reporting' && (
+          <div className="filters-bar">
+            <div className="filter-label"><Filter size={16} /> {t.filters}</div>
+            <select value={filters.period} onChange={e => setFilters({ ...filters, period: e.target.value })}>
+              <option value="weekly">{t.period.weekly}</option>
+              <option value="monthly">{t.period.monthly}</option>
+              <option value="quarterly">{t.period.quarterly}</option>
+            </select>
+            <select value={filters.department} onChange={e => setFilters({ ...filters, department: e.target.value })}>
+              {departments.map(d => <option key={d} value={d}>{d === 'All' ? t.none : d}</option>)}
+            </select>
+            <select value={filters.project} onChange={e => setFilters({ ...filters, project: e.target.value })}>
+              {projects.map(p => <option key={p} value={p}>{p === 'All' ? t.none : p}</option>)}
+            </select>
+          </div>
+        )}
 
         {activeTab === 'overview' && (
           <>
@@ -376,46 +380,41 @@ const App = () => {
 
         {activeTab === 'reporting' && (
           <div className="reporting-tab">
-            <div className="reporting-header">
-              <div className="reporting-controls">
-                {/* Cascading filters: Year → Month → Week */}
-                <div className="reporting-filters">
-                  {/* Year */}
-                  <div className="filter-group">
-                    <label>{t.selectYear}</label>
-                    <select value={filterYear} onChange={e => handleYearChange(e.target.value)}>
-                      {periodOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Month (only if year selected) */}
-                  {filterYear && (
-                    <div className="filter-group">
-                      <label>{t.selectMonth}</label>
-                      <select value={filterMonth} onChange={e => handleMonthChange(e.target.value)}>
-                        <option value="">{t.allMonths}</option>
-                        {(periodOptions.monthsByYear[filterYear] || []).map(m => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Week (only if year + month selected) */}
-                  {filterMonth && (
-                    <div className="filter-group">
-                      <label>{t.selectWeek}</label>
-                      <select value={filterWeek} onChange={e => setFilterWeek(e.target.value)}>
-                        <option value="">{t.allWeeks}</option>
-                        {(periodOptions.weeksByYearMonth[filterMonth] || []).map(w => (
-                          <option key={w} value={w}>{w}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+            <div className="reporting-top-bar">
+              <div className="reporting-filters">
+                <div className="filter-group">
+                  <label>{t.selectYear}</label>
+                  <select value={filterYear} onChange={e => handleYearChange(e.target.value)}>
+                    {periodOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
                 </div>
 
-                {/* Target hours input */}
+                {filterYear && (
+                  <div className="filter-group">
+                    <label>{t.selectMonth}</label>
+                    <select value={filterMonth} onChange={e => handleMonthChange(e.target.value)}>
+                      <option value="">{t.allMonths}</option>
+                      {(periodOptions.monthsByYear[filterYear] || []).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {filterMonth && (
+                  <div className="filter-group">
+                    <label>{t.selectWeek}</label>
+                    <select value={filterWeek} onChange={e => setFilterWeek(e.target.value)}>
+                      <option value="">{t.allWeeks}</option>
+                      {(periodOptions.weeksByYearMonth[filterMonth] || []).map(w => (
+                        <option key={w} value={w}>{w}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="reporting-actions">
                 <div className="target-input">
                   <label>{t.targetHours}</label>
                   <input type="number" min="1" max="9999" value={targetHours}
@@ -423,13 +422,13 @@ const App = () => {
                     className="hours-input" />
                   <span className="per-period">{t.perPeriod}</span>
                 </div>
-              </div>
 
-              {reportingRecords.length > 0 && (
-                <button className="export-btn" onClick={exportReportingExcel}>
-                  <FileDown size={16} /> {t.export}
-                </button>
-              )}
+                {reportingRecords.length > 0 && (
+                  <button className="export-btn" onClick={exportReportingExcel}>
+                    <FileDown size={16} /> {t.export}
+                  </button>
+                )}
+              </div>
             </div>
 
             {Object.keys(reportingByDept).length === 0 ? (
