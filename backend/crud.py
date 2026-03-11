@@ -32,9 +32,14 @@ def save_time_entries(db: Session, entries: list):
 
 def get_stats(db: Session, start_date: date = None, end_date: date = None):
     """
-    Retrieves all time entries, optionally filtered by date range.
+    Retrieves time entries where current_node = 'Close' (case-insensitive).
+    This ensures only fully-approved entries are counted in the main statistics.
+    The approval and reporting-rate features use their own separate queries.
     """
-    query = db.query(database.TimeEntry)
+    from sqlalchemy import func
+    query = db.query(database.TimeEntry).filter(
+        func.lower(database.TimeEntry.current_node) == 'close'
+    )
     if start_date:
         query = query.filter(database.TimeEntry.start_date >= start_date)
     if end_date:
@@ -51,9 +56,9 @@ def clear_all_data(db: Session):
 
 def get_reporting_rate(db: Session):
     """
-    Returns all time entries grouped by (start_date, end_date, employee_id)
-    so the frontend can compute reporting rate per employee per period.
-    Returns only the fields needed for the reporting rate calculation.
+    Returns time entries for the Reporting Rate feature.
+    Excludes rows where approval_status starts with '未提交' (i.e. 'Not Submitted').
+    This ensures only entries that have been at least submitted are counted.
     """
     entries = db.query(
         database.TimeEntry.start_date,
@@ -61,7 +66,8 @@ def get_reporting_rate(db: Session):
         database.TimeEntry.employee_name,
         database.TimeEntry.employee_id,
         database.TimeEntry.department,
-        database.TimeEntry.hours
+        database.TimeEntry.hours,
+        database.TimeEntry.approval_status
     ).all()
 
     return [
@@ -74,6 +80,8 @@ def get_reporting_rate(db: Session):
             "hours": e.hours
         }
         for e in entries
+        # Exclude '未提交' (Not Submitted) – value is '未提交 Not Submitted'
+        if not (e.approval_status or '').strip().startswith('\u672a\u63d0\u4ea4')
     ]
 
 def get_approval_rate(db: Session):
