@@ -87,20 +87,27 @@ def parse_timesheet(file_path: str):
         data_rows = []
         for index, row in df.iterrows():
             # Project vs Non-Project detection
-            project_name = row.get('项目名称(新)', '')
+            proj_new = row.get('项目名称(新)', '')
+            proj_old = row.get('项目名称(作废)', '')
             non_project_name = row.get('非项目名称', '')
             
-            # Identify category and correct column for hours
-            if not pd.isna(project_name) and str(project_name).strip() != "":
+            # 1. Check Project Name (New)
+            if not pd.isna(proj_new) and str(proj_new).strip() != "":
                 category = "Project"
-                display_name = str(project_name).strip()
+                display_name = str(proj_new).strip()
                 hours_val = row.get('合计_项目')
+            # 2. Check Project Name (Obsolete)
+            elif not pd.isna(proj_old) and str(proj_old).strip() != "":
+                category = "Project"
+                display_name = str(proj_old).strip()
+                hours_val = row.get('合计_项目')
+            # 3. Check Non-Project
             elif not pd.isna(non_project_name) and str(non_project_name).strip() != "":
                 category = "Non-Project"
                 display_name = str(non_project_name).strip()
                 hours_val = row.get('合计_非项目')
             else:
-                # Row has neither project nor non-project name, skip
+                # Row has no identifier, skip
                 continue
 
             # Basic validation for hours and employee
