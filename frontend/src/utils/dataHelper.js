@@ -1,9 +1,11 @@
 import dayjs from 'dayjs';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
+import isoWeek from 'dayjs/plugin/isoWeek';
 
 dayjs.extend(weekOfYear);
 dayjs.extend(quarterOfYear);
+dayjs.extend(isoWeek);
 
 /**
  * Aggregates raw time entries based on a period (weekly, monthly, quarterly, yearly)

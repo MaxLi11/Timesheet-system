@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
+dayjs.extend(isoWeek);
 import * as XLSX from 'xlsx';
 import * as dataHelper from './utils/dataHelper';
 
