@@ -1,6 +1,7 @@
 import pandas as pd
 from datetime import datetime
 import numpy as np
+import os
 
 # Default mapping embedded in the code so the Excel file is optional
 DEFAULT_DEPT_MAPPING = {
