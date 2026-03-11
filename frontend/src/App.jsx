@@ -24,6 +24,28 @@ const App = () => {
     project: 'All'
   });
   const [status, setStatus] = useState('checking'); // 'checking', 'connected', 'error'
+  const [lang, setLang] = useState('zh'); // 'zh' or 'en'
+
+  const t = {
+    zh: {
+      dashboard: '仪表盘', stats: '统计分析', timeline: '项目时间轴', activity: '活跃度',
+      title: '工时洞察', subtitle: '实时的工时统计与分析', sync: '同步数据', filters: '筛选:',
+      period: { weekly: '周统计', monthly: '月统计', quarterly: '季度统计' },
+      totalHours: '总工时', avgProject: '项目平均', dataPoints: '数据点',
+      trendTitle: '工时走势', distTitle: '项目分布', heatmapTitle: '活跃热力图', ganttTitle: '项目时间明细',
+      upload: '上传 Excel', backend: '后台连接', connected: '已连接', disconnected: '未连接', checking: '检查中...',
+      success: '成功！已处理', uploadFailed: '上传失败', none: '全体'
+    },
+    en: {
+      dashboard: 'Dashboard', stats: 'Statistics', timeline: 'Timeline', activity: 'Activity',
+      title: 'Timesheet Insights', subtitle: 'Real-time statistics and analysis', sync: 'Sync Data', filters: 'Filters:',
+      period: { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly' },
+      totalHours: 'Total Hours', avgProject: 'Avg. per Project', dataPoints: 'Data Points',
+      trendTitle: 'Hours Trend', distTitle: 'Project Distribution', heatmapTitle: 'Activity Heatmap', ganttTitle: 'Project Timeline',
+      upload: 'Upload Excel', backend: 'Backend', connected: 'Connected', disconnected: 'Disconnected', checking: 'Checking...',
+      success: 'Success! Processed', uploadFailed: 'Upload failed', none: 'All'
+    }
+  }[lang];
 
   const checkConnection = async () => {
     try {
@@ -68,10 +90,10 @@ const App = () => {
       const res = await fetch('http://127.0.0.1:8000/upload', { method: 'POST', body: formData });
       const result = await res.json();
       if (!res.ok) throw new Error(result.detail || result.message || 'Upload failed');
-      alert(`Success! Processed ${result.rows_processed} rows.`);
+      alert(`${t.success} ${result.rows_processed} rows.`);
       fetchData();
     } catch (err) {
-      alert(`Upload failed: ${err.message}`);
+      alert(`${t.uploadFailed}: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -181,34 +203,36 @@ const App = () => {
           <Zap size={32} color="#6366f1" fill="#6366f1" />
           <span>Antigravity</span>
         </div>
+
         <nav className="nav-section">
-          <div className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}><LayoutDashboard size={20} />Overview</div>
-          <div className={`nav-item ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}><BarChart3 size={20} />Statistics</div>
-          <div className={`nav-item ${activeTab === 'gantt' ? 'active' : ''}`} onClick={() => setActiveTab('gantt')}><Users size={20} />Timeline</div>
-          <div className={`nav-item ${activeTab === 'heatmap' ? 'active' : ''}`} onClick={() => setActiveTab('heatmap')}><Calendar size={20} />Activity</div>
+          <div className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}><LayoutDashboard size={20} /> {t.dashboard}</div>
+          <div className={`nav-item ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}><BarChart3 size={20} /> {t.stats}</div>
+          <div className={`nav-item ${activeTab === 'gantt' ? 'active' : ''}`} onClick={() => setActiveTab('gantt')}><Users size={20} /> {t.timeline}</div>
+          <div className={`nav-item ${activeTab === 'heatmap' ? 'active' : ''}`} onClick={() => setActiveTab('heatmap')}><Calendar size={20} /> {t.activity}</div>
         </nav>
-        <div style={{ marginTop: 'auto', paddingBottom: '1rem' }}>
-          <div style={{
-            fontSize: '0.7rem',
-            color: status === 'connected' ? 'var(--success)' : status === 'error' ? 'var(--danger)' : 'var(--warning)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            marginBottom: '1rem'
-          }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: 'currentColor',
-              boxShadow: status === 'connected' ? '0 0 10px var(--success)' : 'none'
-            }}></div>
-            Backend: {status === 'connected' ? 'Connected' : status === 'error' ? 'Disconnected' : 'Checking...'}
-            {status === 'error' && <RefreshCcw size={10} style={{ cursor: 'pointer', marginLeft: '5px' }} onClick={checkConnection} />}
+
+        <div className="sidebar-footer">
+          <div className="lang-toggle">
+            <button className={lang === 'zh' ? 'active' : ''} onClick={() => setLang('zh')}>CN</button>
+            <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
           </div>
-          <label className="upload-zone">
-            <Upload size={24} style={{ marginBottom: '10px' }} />
-            <p style={{ fontSize: '0.8rem' }}>Upload Excel</p>
+
+          <div className="connection-status">
+            <div className="status-dot-container">
+              <div className="status-dot" style={{
+                background: status === 'connected' ? 'var(--success)' : status === 'error' ? 'var(--danger)' : 'var(--warning)',
+                boxShadow: status === 'connected' ? '0 0 10px var(--success)' : 'none'
+              }}></div>
+            </div>
+            <div className="status-text">
+              <span>{t.backend}: {status === 'connected' ? t.connected : status === 'error' ? t.disconnected : t.checking}</span>
+              {status === 'error' && <RefreshCcw size={12} className="refresh-icon" onClick={checkConnection} />}
+            </div>
+          </div>
+
+          <label className="upload-btn">
+            <Upload size={20} />
+            <span>{t.upload}</span>
             <input type="file" hidden onChange={handleFileUpload} />
           </label>
         </div>
@@ -217,48 +241,51 @@ const App = () => {
       <main className="main-content">
         <header className="header">
           <div>
-            <h1 style={{ fontSize: '2rem' }}>Timesheet Insights</h1>
-            <p style={{ color: 'var(--text-muted)' }}>Real-time statistics and analysis</p>
+            <h1>{t.title}</h1>
+            <p className="subtitle">{t.subtitle}</p>
           </div>
-          <button onClick={fetchData} className="refresh-btn"><RefreshCcw size={16} /> Sync Data</button>
+          <button onClick={fetchData} className="refresh-btn"><RefreshCcw size={16} /> {t.sync}</button>
         </header>
 
         <div className="filters-bar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-muted)' }}><Filter size={16} /> Filters:</div>
+          <div className="filter-label"><Filter size={16} /> {t.filters}</div>
           <select value={filters.period} onChange={e => setFilters({ ...filters, period: e.target.value })}>
-            <option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option>
+            <option value="weekly">{t.period.weekly}</option>
+            <option value="monthly">{t.period.monthly}</option>
+            <option value="quarterly">{t.period.quarterly}</option>
           </select>
           <select value={filters.department} onChange={e => setFilters({ ...filters, department: e.target.value })}>
-            {departments.map(d => <option key={d} value={d}>{d}</option>)}
+            {departments.map(d => <option key={d} value={d}>{d === 'All' ? t.none : d}</option>)}
           </select>
           <select value={filters.project} onChange={e => setFilters({ ...filters, project: e.target.value })}>
-            {projects.map(p => <option key={p} value={p}>{p}</option>)}
+            {projects.map(p => <option key={p} value={p}>{p === 'All' ? t.none : p}</option>)}
           </select>
         </div>
 
         {activeTab === 'overview' && (
           <>
             <div className="stats-grid">
-              <div className="card"><h3>Total Hours</h3><p style={{ fontSize: '2.5rem', fontWeight: '800', color: 'var(--primary)' }}>{filteredData.reduce((a, b) => a + b.hours, 0).toFixed(1)} h</p></div>
-              <div className="card"><h3>Avg. per Project</h3><p style={{ fontSize: '2.5rem', fontWeight: '800', color: 'var(--accent)' }}>{(filteredData.reduce((a, b) => a + b.hours, 0) / (projects.length - 1 || 1)).toFixed(1)} h</p></div>
-              <div className="card"><h3>Data points</h3><p style={{ fontSize: '2.5rem', fontWeight: '800', color: 'var(--success)' }}>{filteredData.length}</p></div>
+              <div className="card"><h3>{t.totalHours}</h3><p className="stat-value primary">{filteredData.reduce((a, b) => a + b.hours, 0).toFixed(1)} h</p></div>
+              <div className="card"><h3>{t.avgProject}</h3><p className="stat-value accent">{(filteredData.reduce((a, b) => a + b.hours, 0) / (projects.length - 1 || 1)).toFixed(1)} h</p></div>
+              <div className="card"><h3>{t.dataPoints}</h3><p className="stat-value success">{filteredData.length}</p></div>
             </div>
-            <div className="stats-grid" style={{ gridTemplateColumns: '2fr 1fr' }}>
-              <div className="card"><h3>Hours Trend</h3><ReactECharts option={trendChartOpt} style={{ height: '350px' }} /></div>
-              <div className="card"><h3>Project Distribution</h3><ReactECharts option={pieChartOpt} style={{ height: '350px' }} /></div>
+            <div className="stats-grid main-charts">
+              <div className="card"><h3>{t.trendTitle}</h3><ReactECharts option={trendChartOpt} style={{ height: '350px' }} /></div>
+              <div className="card"><h3>{t.distTitle}</h3><ReactECharts option={pieChartOpt} style={{ height: '350px' }} /></div>
             </div>
           </>
         )}
 
         {activeTab === 'heatmap' && (
-          <div className="card"><h3>Activity Heatmap</h3><ReactECharts option={heatmapOpt} style={{ height: '500px' }} /></div>
+          <div className="card"><h3>{t.heatmapTitle}</h3><ReactECharts option={heatmapOpt} style={{ height: '500px' }} /></div>
         )}
 
         {activeTab === 'gantt' && (
-          <div className="card"><h3>Project Timeline (行军图)</h3><ReactECharts option={ganttOpt} style={{ height: '500px' }} /></div>
+          <div className="card"><h3>{t.ganttTitle}</h3><ReactECharts option={ganttOpt} style={{ height: '500px' }} /></div>
         )}
       </main>
     </div>
   );
 };
+
 export default App;
