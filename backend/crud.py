@@ -4,36 +4,27 @@ from datetime import date
 
 def save_time_entries(db: Session, entries: list):
     """
-    Saves a list of time entry dictionaries to the database.
-    Prevents duplicates by checking employee_id, project_name, start_date, and end_date.
+    Saves a list of time entry dictionaries to the database using rolling updates.
+    For every unique period (start_date, end_date) in the new data, existing entries
+    in the database for that period are deleted before inserting the new ones.
     """
-    count = 0
+    # 1. Identify unique periods in the incoming entries
+    periods = set((e['start_date'], e['end_date']) for e in entries)
+    
+    # 2. Clear old data for these specific periods
+    for start, end in periods:
+        db.query(database.TimeEntry).filter(
+            database.TimeEntry.start_date == start,
+            database.TimeEntry.end_date == end
+        ).delete(synchronize_session=False)
+    
+    # 3. Insert all new entries
     for entry_data in entries:
-        # Check if entry already exists to allow rolling updates/overwrites
-        existing = db.query(database.TimeEntry).filter(
-            database.TimeEntry.employee_id == entry_data['employee_id'],
-            database.TimeEntry.project_name == entry_data['project_name'],
-            database.TimeEntry.start_date == entry_data['start_date'],
-            database.TimeEntry.end_date == entry_data['end_date']
-        ).first()
-
-        if existing:
-            # Update existing entry
-            existing.hours = entry_data['hours']
-            existing.task_details = entry_data['task_details']
-            existing.approval_status = entry_data['approval_status']
-            existing.category = entry_data['category']
-            existing.employee_name = entry_data['employee_name']
-            existing.department = entry_data['department']
-        else:
-            # Create new entry
-            db_entry = database.TimeEntry(**entry_data)
-            db.add(db_entry)
-        
-        count += 1
+        db_entry = database.TimeEntry(**entry_data)
+        db.add(db_entry)
     
     db.commit()
-    return count
+    return len(entries)
 
 def get_stats(db: Session, start_date: date = None, end_date: date = None):
     """
