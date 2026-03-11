@@ -167,19 +167,24 @@ export const computeReportingRate = (entries, filterYear, filterMonth, filterWee
     // Determine aggregation key and filter predicate
     let getPeriodKey, passesFilter;
 
+    const getMonthNum = (d) => String(d.month() + 1).padStart(2, '0');
+    const getWeekNum = (d) => String(d.isoWeek());
+
     if (filterWeek) {
-        // Week-level: only entries within the selected week
-        getPeriodKey = (d) => `${d.year()}-W${String(d.week()).padStart(2, '0')}`;
-        passesFilter = (d) => {
-            const week = `${d.year()}-W${String(d.week()).padStart(2, '0')}`;
-            return week === filterWeek;
-        };
+        // Week-level
+        getPeriodKey = (d) => `${d.year()}-W${getWeekNum(d)}`;
+        passesFilter = (d) => 
+            String(d.year()) === filterYear && 
+            getMonthNum(d) === filterMonth && 
+            getWeekNum(d) === filterWeek;
     } else if (filterMonth) {
-        // Month-level: only entries within the selected month
+        // Month-level
         getPeriodKey = (d) => d.format('YYYY-MM');
-        passesFilter = (d) => d.format('YYYY-MM') === filterMonth;
+        passesFilter = (d) => 
+            String(d.year()) === filterYear && 
+            getMonthNum(d) === filterMonth;
     } else {
-        // Year-level: all entries within the selected year, aggregated by month
+        // Year-level
         getPeriodKey = (d) => d.format('YYYY-MM');
         passesFilter = (d) => String(d.year()) === filterYear;
     }
