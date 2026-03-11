@@ -377,7 +377,7 @@ const App = () => {
       yAxis: { type: 'value', axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
       series: agg.series
     };
-  }, [filteredData, filters.period]);
+  }, [filteredData, dashYear, dashMonth, dashWeek]);
 
   const pieChartOpt = useMemo(() => {
     const grouped = dataHelper.groupByField(filteredData, 'project_name');
@@ -394,14 +394,7 @@ const App = () => {
     };
   }, [filteredData]);
 
-  const heatmapOpt = useMemo(() => {
-    const hData = dataHelper.prepareHeatmapData(filteredData);
-    return {
-      visualMap: { min: 0, max: 8, calculable: true, orient: 'horizontal', left: 'center', top: 'top', inRange: { color: ['rgba(99, 102, 241, 0.1)', '#6366f1'] } },
-      calendar: { top: 60, left: 30, right: 30, cellSize: ['auto', 20], range: '2026', itemStyle: { borderWidth: 0.5 }, dayLabel: { color: '#94a3b8' }, monthLabel: { color: '#94a3b8' } },
-      series: { type: 'heatmap', coordinateSystem: 'calendar', data: hData }
-    };
-  }, [filteredData]);
+
 
   const ganttOpt = useMemo(() => {
     const projData = {};
@@ -587,7 +580,7 @@ const App = () => {
           <>
             <div className="stats-grid">
               <div className="card"><h3>{t.totalHours}</h3><p className="stat-value primary">{filteredData.reduce((a, b) => a + b.hours, 0).toFixed(1)} h</p></div>
-              <div className="card"><h3>{t.avgProject}</h3><p className="stat-value accent">{(filteredData.reduce((a, b) => a + b.hours, 0) / (projects.length - 1 || 1)).toFixed(1)} h</p></div>
+              <div className="card"><h3>{t.avgProject}</h3><p className="stat-value accent">{(filteredData.reduce((a, b) => a + b.hours, 0) / (dashAvailableProjects.length || 1)).toFixed(1)} h</p></div>
               <div className="card"><h3>{t.dataPoints}</h3><p className="stat-value success">{filteredData.length}</p></div>
             </div>
             <div className="stats-grid main-charts">
