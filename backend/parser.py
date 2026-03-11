@@ -2,21 +2,32 @@ import pandas as pd
 from datetime import datetime
 import numpy as np
 
+_DEPT_MAPPING_CACHE = {}
+_LAST_MAPPING_MTIME = 0
+
 def load_dept_mapping():
     """
-    Loads department name mapping from 部门简称.xlsx
+    Loads department name mapping from 部门简称.xlsx with caching.
+    Only reloads if the file has been modified.
     """
+    global _DEPT_MAPPING_CACHE, _LAST_MAPPING_MTIME
     mapping_path = r"d:\Antigravity\Project-timesheet\部门简称.xlsx"
+    
     if not os.path.exists(mapping_path):
-        return {}
+        return _DEPT_MAPPING_CACHE
+
     try:
-        # Read the mapping file (Sheet1 corresponds to what was seen)
-        mapping_df = pd.read_excel(mapping_path, sheet_name='Sheet1')
-        # Expecting columns '部门' and '部门简称'
-        return dict(zip(mapping_df['部门'].astype(str), mapping_df['部门简称'].astype(str)))
+        current_mtime = os.path.getmtime(mapping_path)
+        # Only read the file if it's new or modified
+        if current_mtime > _LAST_MAPPING_MTIME:
+            mapping_df = pd.read_excel(mapping_path, sheet_name='Sheet1')
+            _DEPT_MAPPING_CACHE = dict(zip(mapping_df['部门'].astype(str), mapping_df['部门简称'].astype(str)))
+            _LAST_MAPPING_MTIME = current_mtime
+            print(f"DEBUG: Department mapping reloaded (mtime: {current_mtime})")
     except Exception as e:
         print(f"Warning: Failed to load department mapping: {e}")
-        return {}
+    
+    return _DEPT_MAPPING_CACHE
 
 def parse_timesheet(file_path: str):
     """
