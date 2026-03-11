@@ -390,9 +390,7 @@ const App = () => {
 
         <nav className="nav-section">
           <div className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}><LayoutDashboard size={20} /> {t.dashboard}</div>
-          <div className={`nav-item ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}><BarChart3 size={20} /> {t.stats}</div>
           <div className={`nav-item ${activeTab === 'gantt' ? 'active' : ''}`} onClick={() => setActiveTab('gantt')}><Users size={20} /> {t.timeline}</div>
-          <div className={`nav-item ${activeTab === 'heatmap' ? 'active' : ''}`} onClick={() => setActiveTab('heatmap')}><Calendar size={20} /> {t.activity}</div>
           <div className={`nav-item ${activeTab === 'reporting' ? 'active' : ''}`} onClick={() => setActiveTab('reporting')}><ClipboardCheck size={20} /> {t.reporting}</div>
           <div className={`nav-item ${activeTab === 'approval' ? 'active' : ''}`} onClick={() => setActiveTab('approval')}><CheckCircle2 size={20} /> {t.approval}</div>
         </nav>
@@ -466,10 +464,6 @@ const App = () => {
               <div className="card"><h3>{t.distTitle}</h3><ReactECharts option={pieChartOpt} style={{ height: '350px' }} /></div>
             </div>
           </>
-        )}
-
-        {activeTab === 'heatmap' && (
-          <div className="card"><h3>{t.heatmapTitle}</h3><ReactECharts option={heatmapOpt} style={{ height: '500px' }} /></div>
         )}
 
         {activeTab === 'gantt' && (
