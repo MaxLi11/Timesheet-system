@@ -5,37 +5,57 @@ import numpy as np
 def parse_timesheet(file_path: str):
     """
     Parses the timesheet Excel file and returns a list of dictionaries for the DB.
+    Handles duplicate '合计' columns (O for Projects, R for Non-Projects).
     """
     try:
-        # Read the first sheet (Sheet0 usually contains the data)
+        # Read the first sheet
         df = pd.read_excel(file_path, sheet_name=0)
         
-        # Strip whitespace from columns
-        df.columns = [str(c).strip() for c in df.columns]
+        # Get raw columns to detect duplicates and rename them
+        raw_cols = list(df.columns)
+        new_cols = []
+        heji_count = 0
+        for col in raw_cols:
+            c_name = str(col).strip()
+            if c_name == '合计':
+                if heji_count == 0:
+                    new_cols.append('合计_项目')
+                else:
+                    new_cols.append('合计_非项目')
+                heji_count += 1
+            else:
+                new_cols.append(c_name)
+        df.columns = new_cols
         
-        required_cols = ['员工', '所属部门', '工号', '开始日期', '结束日期', '合计']
+        required_cols = ['员工', '所属部门', '工号', '开始日期', '结束日期']
         missing = [col for col in required_cols if col not in df.columns]
         if missing:
-            raise ValueError(f"Excel文件中缺少以下必填列: {', '.join(missing)}。 请确保使用的是标准的导出表格。 (检测到的列有: {', '.join(df.columns)})")
+            raise ValueError(f"Excel文件中缺少以下必填列: {', '.join(missing)}。")
 
         data_rows = []
         for index, row in df.iterrows():
-            # Basic validation
-            if pd.isna(row['员工']) or pd.isna(row['合计']):
-                continue
-
             # Project vs Non-Project detection
             project_name = row.get('项目名称(新)', '')
             non_project_name = row.get('非项目名称', '')
             
-            # If both are empty, might be an invalid row
-            if (pd.isna(project_name) or str(project_name).strip() == "") and (pd.isna(non_project_name) or str(non_project_name).strip() == ""):
+            # Identify category and correct column for hours
+            if not pd.isna(project_name) and str(project_name).strip() != "":
+                category = "Project"
+                display_name = str(project_name).strip()
+                hours_val = row.get('合计_项目')
+            elif not pd.isna(non_project_name) and str(non_project_name).strip() != "":
+                category = "Non-Project"
+                display_name = str(non_project_name).strip()
+                hours_val = row.get('合计_非项目')
+            else:
+                # Row has neither project nor non-project name, skip
                 continue
-            
-            category = "Project" if not pd.isna(project_name) and str(project_name).strip() != "" else "Non-Project"
-            display_name = str(project_name).strip() if category == "Project" else str(non_project_name).strip()
 
-            # Date formatting
+            # Basic validation for hours and employee
+            if pd.isna(row['员工']) or pd.isna(hours_val) or str(hours_val).strip() == "" or float(hours_val) == 0:
+                continue
+
+            # Date formatting with error handling
             try:
                 start_date = row['开始日期']
                 if isinstance(start_date, str):
@@ -50,7 +70,7 @@ def parse_timesheet(file_path: str):
                     end_date = end_date.date()
             except Exception as de:
                 print(f"Row {index} date error: {de}")
-                continue # Skip if date format is invalid
+                continue 
 
             entry = {
                 "employee_name": str(row['员工']).strip(),
@@ -60,7 +80,7 @@ def parse_timesheet(file_path: str):
                 "category": category,
                 "start_date": start_date,
                 "end_date": end_date,
-                "hours": float(row['合计']),
+                "hours": float(hours_val),
                 "task_details": str(row.get('任务详情', '')).strip(),
                 "approval_status": str(row.get('核准状态', '')).strip()
             }
@@ -68,11 +88,9 @@ def parse_timesheet(file_path: str):
             
         return data_rows
     except Exception as e:
-        # Re-raise with a cleaner message for the API to catch
         raise Exception(f"解析Excel失败: {str(e)}")
 
 if __name__ == "__main__":
-    # Test with current file
     import os
     test_path = r"d:\Antigravity\Project-timesheet\Timesheet Report-20260309172417(1).xlsx"
     if os.path.exists(test_path):
