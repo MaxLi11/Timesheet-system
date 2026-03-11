@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from . import database, parser, crud
 import shutil
 import os
+import traceback
 
 app = FastAPI(title="Timesheet Analysis API")
 
@@ -67,9 +68,22 @@ async def upload_timesheet(file: UploadFile = File(...), db: Session = Depends(g
             
         count = crud.save_time_entries(db, entries)
         return {"message": "Upload successful", "rows_processed": count}
+    except Exception as e:
+        # This block already exists for general exceptions during parsing/saving
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if os.path.exists(temp_path):
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except Exception as e:
+                # Add specific handling for errors during file cleanup
+                traceback.print_exc()
+                # Optionally, you could log this error without re-raising
+                # if the main operation was successful, or re-raise if cleanup
+                # failure is critical. For now, we'll just log it.
+                print(f"Error removing temporary file {temp_path}: {e}")
+
 
 @app.get("/stats")
 def get_statistics(db: Session = Depends(get_db)):
@@ -86,3 +100,12 @@ def clear_data(db: Session = Depends(get_db)):
     """
     crud.clear_all_data(db)
     return {"message": "All data cleared successfully"}
+
+@app.get("/reporting-rate")
+def get_reporting_rate(db: Session = Depends(get_db)):
+    """
+    Returns all time entries with aggregation-ready fields for the
+    Complete Reporting Rate feature. The frontend handles aggregation
+    so we can reuse the same logic per period and target hours.
+    """
+    return crud.get_reporting_rate(db)

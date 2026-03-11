@@ -1,5 +1,5 @@
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 import numpy as np
 import os
 
@@ -117,16 +117,24 @@ def parse_timesheet(file_path: str):
             # Date formatting with error handling
             try:
                 start_date = row['开始日期']
+                end_date = row['结束日期']
+                
+                if pd.isna(start_date) or pd.isna(end_date):
+                    continue
+
                 if isinstance(start_date, str):
                     start_date = datetime.strptime(start_date.strip(), '%Y-%m-%d').date()
                 elif isinstance(start_date, datetime):
                     start_date = start_date.date()
                 
-                end_date = row['结束日期']
                 if isinstance(end_date, str):
                     end_date = datetime.strptime(end_date.strip(), '%Y-%m-%d').date()
                 elif isinstance(end_date, datetime):
                     end_date = end_date.date()
+                
+                # Double check we actually have date objects
+                if not isinstance(start_date, date) or not isinstance(end_date, date):
+                    continue
             except Exception as de:
                 print(f"Row {index} date error: {de}")
                 continue 

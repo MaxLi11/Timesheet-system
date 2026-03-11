@@ -108,3 +108,57 @@ export const aggregateProjectData = (entries, period = 'monthly') => {
         projects: sortedProjects
     };
 };
+
+/**
+ * Computes per-employee, per-period actual vs target hours.
+ * Returns only records where gap != 0.
+ * @param {Array} entries - Raw time entries from /reporting-rate
+ * @param {string} period - 'weekly' | 'monthly'
+ * @param {number} targetHours - User-provided target per period
+ * @returns {Array} { period_key, department, employee_name, employee_id, actual_hours, gap }
+ */
+export const computeReportingRate = (entries, period, targetHours) => {
+    // Group by (period_key, employee_id)
+    const map = {};
+    entries.forEach(entry => {
+        const d = dayjs(entry.start_date);
+        const periodKey = period === 'weekly'
+            ? `${d.year()}-W${String(d.week()).padStart(2, '0')}`
+            : d.format('YYYY-MM');
+
+        const key = `${periodKey}___${entry.employee_id}`;
+        if (!map[key]) {
+            map[key] = {
+                period_key: periodKey,
+                department: entry.department,
+                employee_name: entry.employee_name,
+                employee_id: entry.employee_id,
+                actual_hours: 0
+            };
+        }
+        map[key].actual_hours += entry.hours;
+    });
+
+    // Compute gap and filter out zeros
+    return Object.values(map)
+        .map(r => ({ ...r, actual_hours: parseFloat(r.actual_hours.toFixed(2)), gap: parseFloat((targetHours - r.actual_hours).toFixed(2)) }))
+        .filter(r => r.gap !== 0)
+        .sort((a, b) => a.period_key.localeCompare(b.period_key) || a.department.localeCompare(b.department));
+};
+
+/**
+ * Groups computeReportingRate results by department.
+ * @param {Array} records - Output of computeReportingRate
+ * @returns {Object} { dept: [records] }
+ */
+export const groupReportingByDept = (records) => {
+    const groups = {};
+    records.forEach(r => {
+        if (!groups[r.department]) groups[r.department] = { totalGap: 0, employees: [] };
+        groups[r.department].totalGap += r.gap;
+        groups[r.department].employees.push(r);
+    });
+    // Round summary gaps
+    Object.values(groups).forEach(g => { g.totalGap = parseFloat(g.totalGap.toFixed(2)); });
+    return groups;
+};

@@ -1,17 +1,21 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   LayoutDashboard,
   Upload,
   BarChart3,
-  PieChart,
   Calendar,
   Users,
   RefreshCcw,
   Zap,
-  Filter
+  Filter,
+  ChevronDown,
+  ChevronRight,
+  FileDown,
+  ClipboardCheck
 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
 import * as dataHelper from './utils/dataHelper';
 
 const App = () => {
@@ -25,25 +29,40 @@ const App = () => {
   });
   const [status, setStatus] = useState('checking'); // 'checking', 'connected', 'error'
   const [lang, setLang] = useState('zh'); // 'zh' or 'en'
+  // Reporting Rate state
+  const [reportingData, setReportingData] = useState([]);
+  const [targetHours, setTargetHours] = useState(40);
+  const [reportingPeriod, setReportingPeriod] = useState('weekly');
+  const [expandedDepts, setExpandedDepts] = useState(new Set());
 
   const t = {
     zh: {
       dashboard: '仪表盘', stats: '统计分析', timeline: '项目时间轴', activity: '活跃度',
+      reporting: '完整填报率',
       title: '工时洞察', subtitle: '实时的工时统计与分析', sync: '同步数据', filters: '筛选:',
       period: { weekly: '周统计', monthly: '月统计', quarterly: '季度统计' },
       totalHours: '总工时', avgProject: '项目平均', dataPoints: '数据点',
       trendTitle: '工时走势', distTitle: '项目分布', heatmapTitle: '活跃热力图', ganttTitle: '项目时间明细',
       upload: '上传 Excel', backend: '后台连接', connected: '已连接', disconnected: '未连接', checking: '检查中...',
-      success: '成功！已处理', uploadFailed: '上传失败', none: '全体'
+      success: '成功！已处理', uploadFailed: '上传失败', none: '全体',
+      targetHours: '应填报工时', perPeriod: '/ 周期',
+      dept: '部门', employee: '员工', actual: '实际工时', gap: '差额', period_key: '周期',
+      export: '导出 Excel', noIssues: '所有部门填报正常，未发现差异。',
+      deficit: '不足', excess: '超出'
     },
     en: {
       dashboard: 'Dashboard', stats: 'Statistics', timeline: 'Timeline', activity: 'Activity',
+      reporting: 'Reporting Rate',
       title: 'Timesheet Insights', subtitle: 'Real-time statistics and analysis', sync: 'Sync Data', filters: 'Filters:',
       period: { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly' },
       totalHours: 'Total Hours', avgProject: 'Avg. per Project', dataPoints: 'Data Points',
       trendTitle: 'Hours Trend', distTitle: 'Project Distribution', heatmapTitle: 'Activity Heatmap', ganttTitle: 'Project Timeline',
       upload: 'Upload Excel', backend: 'Backend', connected: 'Connected', disconnected: 'Disconnected', checking: 'Checking...',
-      success: 'Success! Processed', uploadFailed: 'Upload failed', none: 'All'
+      success: 'Success! Processed', uploadFailed: 'Upload failed', none: 'All',
+      targetHours: 'Target Hours', perPeriod: '/ Period',
+      dept: 'Dept', employee: 'Employee', actual: 'Actual', gap: 'Gap', period_key: 'Period',
+      export: 'Export Excel', noIssues: 'All departments are reporting correctly. No issues found.',
+      deficit: 'Deficit', excess: 'Excess'
     }
   }[lang];
 
@@ -56,6 +75,17 @@ const App = () => {
       setStatus('error');
     }
   };
+
+  const fetchReportingData = useCallback(async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/reporting-rate');
+      if (!res.ok) return;
+      const json = await res.json();
+      setReportingData(json);
+    } catch (err) {
+      console.error('Failed to fetch reporting data:', err);
+    }
+  }, []);
 
   const fetchData = async () => {
     try {
@@ -76,9 +106,10 @@ const App = () => {
   useEffect(() => {
     checkConnection();
     fetchData();
+    fetchReportingData();
     const interval = setInterval(checkConnection, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchReportingData]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -92,11 +123,49 @@ const App = () => {
       if (!res.ok) throw new Error(result.detail || result.message || 'Upload failed');
       alert(`${t.success} ${result.rows_processed} rows.`);
       fetchData();
+      fetchReportingData();
     } catch (err) {
       alert(`${t.uploadFailed}: ${err.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Reporting rate computed data
+  const reportingRecords = useMemo(() =>
+    dataHelper.computeReportingRate(reportingData, reportingPeriod, Number(targetHours)),
+    [reportingData, reportingPeriod, targetHours]
+  );
+
+  const reportingByDept = useMemo(() =>
+    dataHelper.groupReportingByDept(reportingRecords),
+    [reportingRecords]
+  );
+
+  const toggleDept = (dept) => {
+    setExpandedDepts(prev => {
+      const next = new Set(prev);
+      if (next.has(dept)) next.delete(dept);
+      else next.add(dept);
+      return next;
+    });
+  };
+
+  const exportReportingExcel = () => {
+    const rows = reportingRecords.map(r => ({
+      [t.period_key]: r.period_key,
+      [t.dept]: r.department,
+      [t.employee]: r.employee_name,
+      '员工ID': r.employee_id,
+      [t.targetHours]: Number(targetHours),
+      [t.actual]: r.actual_hours,
+      [t.gap]: r.gap,
+      '状态': r.gap > 0 ? t.deficit : t.excess
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, t.reporting);
+    XLSX.writeFile(wb, `完整填报率_${reportingPeriod}_target${targetHours}h.xlsx`);
   };
 
   const filteredData = useMemo(() => {
@@ -203,6 +272,7 @@ const App = () => {
           <div className={`nav-item ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}><BarChart3 size={20} /> {t.stats}</div>
           <div className={`nav-item ${activeTab === 'gantt' ? 'active' : ''}`} onClick={() => setActiveTab('gantt')}><Users size={20} /> {t.timeline}</div>
           <div className={`nav-item ${activeTab === 'heatmap' ? 'active' : ''}`} onClick={() => setActiveTab('heatmap')}><Calendar size={20} /> {t.activity}</div>
+          <div className={`nav-item ${activeTab === 'reporting' ? 'active' : ''}`} onClick={() => setActiveTab('reporting')}><ClipboardCheck size={20} /> {t.reporting}</div>
         </nav>
 
         <div className="sidebar-footer">
@@ -276,6 +346,79 @@ const App = () => {
 
         {activeTab === 'gantt' && (
           <div className="card"><h3>{t.ganttTitle}</h3><ReactECharts option={ganttOpt} style={{ height: '500px' }} /></div>
+        )}
+
+        {activeTab === 'reporting' && (
+          <div className="reporting-tab">
+            <div className="reporting-header">
+              <div className="reporting-controls">
+                <div className="period-toggle">
+                  <button className={reportingPeriod === 'weekly' ? 'active' : ''} onClick={() => setReportingPeriod('weekly')}>{t.period.weekly}</button>
+                  <button className={reportingPeriod === 'monthly' ? 'active' : ''} onClick={() => setReportingPeriod('monthly')}>{t.period.monthly}</button>
+                </div>
+                <div className="target-input">
+                  <label>{t.targetHours}</label>
+                  <input type="number" min="1" max="999" value={targetHours}
+                    onChange={e => setTargetHours(e.target.value)}
+                    className="hours-input" />
+                  <span className="per-period">{t.perPeriod}</span>
+                </div>
+              </div>
+              {reportingRecords.length > 0 && (
+                <button className="export-btn" onClick={exportReportingExcel}>
+                  <FileDown size={16} /> {t.export}
+                </button>
+              )}
+            </div>
+
+            {Object.keys(reportingByDept).length === 0 ? (
+              <div className="card no-issues">{t.noIssues}</div>
+            ) : (
+              Object.entries(reportingByDept).map(([dept, info]) => (
+                <div key={dept} className="dept-accordion">
+                  <div className="dept-header" onClick={() => toggleDept(dept)}>
+                    <div className="dept-name">
+                      {expandedDepts.has(dept) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      <strong>{dept}</strong>
+                      <span className="emp-count">({info.employees.length} 人)</span>
+                    </div>
+                    <div className={`dept-gap ${info.totalGap > 0 ? 'deficit' : 'excess'}`}>
+                      {info.totalGap > 0 ? `↓ ${info.totalGap}h ${t.deficit}` : `↑ ${Math.abs(info.totalGap)}h ${t.excess}`}
+                    </div>
+                  </div>
+
+                  {expandedDepts.has(dept) && (
+                    <div className="emp-table-wrap">
+                      <table className="emp-table">
+                        <thead>
+                          <tr>
+                            <th>{t.period_key}</th>
+                            <th>{t.employee}</th>
+                            <th>{t.actual}</th>
+                            <th>{t.targetHours}</th>
+                            <th>{t.gap}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {info.employees.map((emp, i) => (
+                            <tr key={i}>
+                              <td>{emp.period_key}</td>
+                              <td>{emp.employee_name}</td>
+                              <td>{emp.actual_hours}h</td>
+                              <td>{targetHours}h</td>
+                              <td className={emp.gap > 0 ? 'gap-deficit' : 'gap-excess'}>
+                                {emp.gap > 0 ? `↓ ${emp.gap}h` : `↑ ${Math.abs(emp.gap)}h`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         )}
       </main>
     </div>
