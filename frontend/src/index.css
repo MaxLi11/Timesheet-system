@@ -163,17 +163,122 @@ button:hover {
   filter: brightness(1.1);
 }
 
-.upload-zone {
-  border: 2px dashed var(--glass-border);
-  padding: 2.5rem;
-  border-radius: 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  background: rgba(255, 255, 255, 0.02);
+/* Sidebar Footer */
+.sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--glass-border);
 }
 
-.upload-zone:hover {
-  border-color: var(--primary);
-  background: rgba(99, 102, 241, 0.05);
+.lang-toggle {
+  display: flex;
+  background: rgba(0,0,0,0.2);
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.lang-toggle button {
+  flex: 1;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  padding: 6px;
+  border-radius: 6px;
+  border: none;
+}
+
+.lang-toggle button.active {
+  background: var(--primary);
+  color: white;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-dot-container {
+  display: flex;
+  align-items: center;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-text {
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.refresh-icon {
+  cursor: pointer;
+  transition: transform 0.3s;
+}
+
+.refresh-icon:hover {
+  transform: rotate(180deg);
+}
+
+.upload-btn {
+  background: var(--primary-glow);
+  color: var(--primary);
+  border: 1px dashed var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.upload-btn:hover {
+  background: var(--primary);
+  color: white;
+}
+
+/* Typography and Stats */
+.stat-value {
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin-top: 0.5rem;
+}
+
+.stat-value.primary { color: var(--primary); }
+.stat-value.accent { color: var(--accent); }
+.stat-value.success { color: var(--success); }
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* Layout helpers */
+.main-charts {
+  grid-template-columns: 2fr 1fr;
+}
+
+@media (max-width: 1024px) {
+  .main-charts {
+    grid-template-columns: 1fr;
+  }
 }
