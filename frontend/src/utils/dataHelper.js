@@ -62,3 +62,49 @@ export const prepareHeatmapData = (entries) => {
     });
     return Object.entries(dataMap).map(([date, hours]) => [date, hours]);
 };
+
+/**
+ * Aggregates data for multiple projects across a time period
+ */
+export const aggregateProjectData = (entries, period = 'monthly') => {
+    const timeMap = {}; // { timeKey: { projectA: hours, projectB: hours } }
+    const projects = new Set();
+
+    entries.forEach(entry => {
+        const date = dayjs(entry.start_date);
+        let key = '';
+
+        if (period === 'weekly') {
+            key = `${date.year()}-W${date.week()}`;
+        } else if (period === 'monthly') {
+            key = date.format('YYYY-MM');
+        } else if (period === 'quarterly') {
+            key = `${date.year()}-Q${date.quarter()}`;
+        } else {
+            key = date.format('YYYY');
+        }
+
+        const projName = entry.project_name || 'Unknown';
+        projects.add(projName);
+
+        if (!timeMap[key]) timeMap[key] = {};
+        if (!timeMap[key][projName]) timeMap[key][projName] = 0;
+        timeMap[key][projName] += entry.hours;
+    });
+
+    const sortedLabels = Object.keys(timeMap).sort();
+    const sortedProjects = [...projects].sort();
+
+    const series = sortedProjects.map(proj => ({
+        name: proj,
+        type: 'line',
+        smooth: true,
+        data: sortedLabels.map(label => (timeMap[label][proj] || 0).toFixed(1))
+    }));
+
+    return {
+        labels: sortedLabels,
+        series,
+        projects: sortedProjects
+    };
+};

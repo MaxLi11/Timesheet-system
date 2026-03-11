@@ -111,20 +111,14 @@ const App = () => {
   const projects = useMemo(() => ['All', ...new Set(data.map(i => i.project_name))], [data]);
 
   const trendChartOpt = useMemo(() => {
-    const agg = dataHelper.aggregateData(filteredData, filters.period);
+    const agg = dataHelper.aggregateProjectData(filteredData, filters.period);
     return {
       tooltip: { trigger: 'axis', backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#6366f1', textStyle: { color: '#fff' } },
-      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      legend: { data: agg.projects, textStyle: { color: '#94a3b8' }, top: 0, type: 'scroll' },
+      grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
       xAxis: { type: 'category', data: agg.labels, axisLabel: { color: '#94a3b8' } },
       yAxis: { type: 'value', axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
-      series: [{
-        data: agg.values,
-        type: 'line',
-        smooth: true,
-        areaStyle: { opacity: 0.2, color: '#6366f1' },
-        lineStyle: { color: '#6366f1', width: 3 },
-        itemStyle: { color: '#6366f1' }
-      }]
+      series: agg.series
     };
   }, [filteredData, filters.period]);
 
