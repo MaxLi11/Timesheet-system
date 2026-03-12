@@ -23,9 +23,9 @@ def update_frontend_ip(ip):
     with open(app_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Look for: const API_BASE_URL = '...';
+    # Look for: const API_BASE_URL = ...;
     new_content = re.sub(
-        r"const API_BASE_URL = 'http://[^']+';",
+        r"const API_BASE_URL = [^;]+;",
         f"const API_BASE_URL = 'http://{ip}:8000';",
         content
     )
