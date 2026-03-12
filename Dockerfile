@@ -28,8 +28,11 @@ COPY --from=frontend-build /frontend/dist /usr/share/nginx/html
 # Nginx config for single port usage
 RUN echo 'server { \
     listen 7860; \
+    client_max_body_size 100M; \
     location /api/ { \
         proxy_pass http://localhost:8000/; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
     } \
     location / { \
         root /usr/share/nginx/html; \
