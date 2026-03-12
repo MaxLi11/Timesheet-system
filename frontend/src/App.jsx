@@ -32,8 +32,10 @@ const App = () => {
   const [dashWeek, setDashWeek] = useState('');
   const [dashSelectedDepts, setDashSelectedDepts] = useState(new Set());
   const [dashSelectedProjects, setDashSelectedProjects] = useState(new Set());
+  const [dashAnalysisSelectedProjects, setDashAnalysisSelectedProjects] = useState(new Set());
   const [dashDeptOpen, setDashDeptOpen] = useState(false);
   const [dashProjOpen, setDashProjOpen] = useState(false);
+  const [dashAnalysisProjOpen, setDashAnalysisProjOpen] = useState(false);
   const [status, setStatus] = useState('checking'); // 'checking', 'connected', 'error'
   const [lang, setLang] = useState('zh'); // 'zh' or 'en'
   // Reporting Rate state
@@ -74,7 +76,9 @@ const App = () => {
       noApprovalIssues: '当前筛选周期内没有待审批工时。',
       filterProject: '筛选项目（可多选）', filterApprover: '筛选未操作者',
       allApprovers: '全部人员', selectAll: '全选', clearAll: '清空',
-      rankingTitle: '项目工时排名', avgMonthlyHours: '月均工时'
+      rankingTitle: '项目工时排名', avgMonthlyHours: '月均工时',
+      projectAnalysis: '项目工时分析', deptContribution: '部门工时占比',
+      selectProjects: '选择分析项目（可多选）'
     },
     en: {
       dashboard: 'Dashboard', stats: 'Statistics', timeline: 'Timeline', activity: 'Activity',
@@ -99,7 +103,9 @@ const App = () => {
       noApprovalIssues: 'No pending approvals in the selected period.',
       filterProject: 'Filter Projects (multi-select)', filterApprover: 'Filter Approver',
       allApprovers: 'All Approvers', selectAll: 'All', clearAll: 'Clear',
-      rankingTitle: 'Project Hours Ranking', avgMonthlyHours: 'Avg. Monthly Hours'
+      rankingTitle: 'Project Hours Ranking', avgMonthlyHours: 'Avg. Monthly Hours',
+      projectAnalysis: 'Project Analysis', deptContribution: 'Dept. Contribution',
+      selectProjects: 'Select Projects'
     }
   }[lang];
 
@@ -245,7 +251,7 @@ const App = () => {
     [approvalData, approvalYear, approvalMonth, selectedProjects, selectedApprover]
   );
 
-  // Toggle a project in the multi-select set
+  // Toggle a project in the multi-select set (for approval)
   const toggleProject = (proj) => {
     setSelectedProjects(prev => {
       const next = new Set(prev);
@@ -364,6 +370,14 @@ const App = () => {
 
   const toggleDashProject = (proj) => {
     setDashSelectedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(proj)) next.delete(proj); else next.add(proj);
+      return next;
+    });
+  };
+
+  const toggleDashAnalysisProject = (proj) => {
+    setDashAnalysisSelectedProjects(prev => {
       const next = new Set(prev);
       if (next.has(proj)) next.delete(proj); else next.add(proj);
       return next;
@@ -531,6 +545,37 @@ const App = () => {
     };
   }, [filteredData]);
 
+  const projectAnalysisOpt = useMemo(() => {
+    const periodType = dashWeek ? 'weekly' : 'monthly';
+    const analysisRes = dataHelper.aggregateProjectDeptData(data, periodType, [...dashAnalysisSelectedProjects]);
+    
+    return {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+        borderColor: '#6366f1',
+        textStyle: { color: '#fff' },
+        formatter: (params) => {
+          let res = `${params[0].name}<br/>`;
+          let total = 0;
+          params.forEach(p => total += p.value);
+          params.forEach(p => {
+            const percent = total > 0 ? ((p.value / total) * 100).toFixed(1) : 0;
+            res += `${p.marker} ${p.seriesName}: ${p.value} h (${percent}%)<br/>`;
+          });
+          res += `<strong>Total: ${total.toFixed(1)} h</strong>`;
+          return res;
+        }
+      },
+      legend: { textStyle: { color: '#94a3b8' }, type: 'scroll', bottom: 10 },
+      grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+      xAxis: { type: 'category', data: analysisRes.labels, axisLabel: { color: '#94a3b8' } },
+      yAxis: { type: 'value', name: t.totalHours, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+      series: analysisRes.series
+    };
+  }, [data, dashAnalysisSelectedProjects, dashWeek, t.totalHours]);
+
   return (
     <div className="app-container">
       <aside className="sidebar">
@@ -541,6 +586,7 @@ const App = () => {
 
         <nav className="nav-section">
           <div className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}><LayoutDashboard size={20} /> {t.dashboard}</div>
+          <div className={`nav-item ${activeTab === 'project_analysis' ? 'active' : ''}`} onClick={() => setActiveTab('project_analysis')}><BarChart3 size={20} /> {t.projectAnalysis}</div>
           <div className={`nav-item ${activeTab === 'gantt' ? 'active' : ''}`} onClick={() => setActiveTab('gantt')}><Users size={20} /> {t.timeline}</div>
           <div className={`nav-item ${activeTab === 'reporting' ? 'active' : ''}`} onClick={() => setActiveTab('reporting')}><ClipboardCheck size={20} /> {t.reporting}</div>
           <div className={`nav-item ${activeTab === 'approval' ? 'active' : ''}`} onClick={() => setActiveTab('approval')}><CheckCircle2 size={20} /> {t.approval}</div>
@@ -590,7 +636,7 @@ const App = () => {
           <div className="filters-bar" style={{ display: 'none' }} />
         )}
 
-        {activeTab === 'overview' && (
+        {(activeTab === 'overview' || activeTab === 'project_analysis') && (
           <div className="stats-grid" style={{ marginBottom: '1.5rem', marginTop: '0.5rem' }}>
             <div className="card"><h3>{t.totalHours}</h3><p className="stat-value primary">{filteredData.reduce((a, b) => a + b.hours, 0).toFixed(1)} h</p></div>
             <div className="card"><h3>{t.avgProject}</h3><p className="stat-value accent">{(filteredData.reduce((a, b) => a + b.hours, 0) / (dashAvailableProjects.length || 1)).toFixed(1)} h</p></div>
@@ -703,8 +749,52 @@ const App = () => {
                     </>
                   )}
                 </div>
+
+                {/* Project Analysis Specific Filter */}
+                {activeTab === 'project_analysis' && (
+                  <div className="filter-group dropdown-container">
+                    <label>{t.selectProjects}</label>
+                    <button 
+                      className="dropdown-button" 
+                      onClick={() => { setDashAnalysisProjOpen(!dashAnalysisProjOpen); setDashDeptOpen(false); setDashProjOpen(false); }}
+                    >
+                      {dashAnalysisSelectedProjects.size === 0 ? (t.allProjects || '全部项目') : `已选择 ${dashAnalysisSelectedProjects.size} 项`}
+                      <ChevronDown size={16} />
+                    </button>
+                    {dashAnalysisProjOpen && (
+                      <>
+                        <div className="dropdown-overlay" onClick={() => setDashAnalysisProjOpen(false)} />
+                        <div className="approval-project-panel">
+                          <div className="project-panel-header">
+                            <span className="filter-group-label">{t.selectProjects}</span>
+                            <div className="project-panel-btns">
+                              <button onClick={() => setDashAnalysisSelectedProjects(new Set(dashAvailableProjects))}>{t.selectAll || '全选'}</button>
+                              <button onClick={() => setDashAnalysisSelectedProjects(new Set())}>{t.clearAll || '清空'}</button>
+                            </div>
+                          </div>
+                          <div className="project-checkboxes">
+                            {dashAvailableProjects.map(proj => (
+                              <label key={proj} className={`project-chip ${dashAnalysisSelectedProjects.has(proj) ? 'selected' : ''}`}>
+                                <input type="checkbox" checked={dashAnalysisSelectedProjects.has(proj)} onChange={() => toggleDashAnalysisProject(proj)} />
+                                {proj}
+                              </label>
+                            ))}
+                            {dashAvailableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'project_analysis' && (
+          <div className="card" style={{ marginTop: '1.5rem' }}>
+            <h3>{t.deptContribution}</h3>
+            <ReactECharts option={projectAnalysisOpt} style={{ height: '500px' }} notMerge={true} />
           </div>
         )}
 
