@@ -101,7 +101,8 @@ export const aggregateProjectData = (data, periodType = 'monthly') => {
         name: proj,
         type: 'line',
         smooth: true,
-        data: sortedLabels.map(label => (timeMap[label][proj] || 0).toFixed(1))
+        emphasis: { focus: 'series' },
+        data: sortedLabels.map(label => parseFloat((timeMap[label][proj] || 0).toFixed(1)))
     }));
 
     return {
@@ -168,7 +169,7 @@ export const computeReportingRate = (entries, filterYear, filterMonth, filterWee
     let getPeriodKey, passesFilter;
 
     const getMonthNum = (d) => String(d.month() + 1).padStart(2, '0');
-    const getWeekNum = (d) => String(d.isoWeek());
+    const getWeekNum = (d) => String(d.isoWeek()).padStart(2, '0');
 
     if (filterWeek) {
         // Week-level

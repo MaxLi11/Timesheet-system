@@ -56,8 +56,8 @@ async def upload_timesheet(file: UploadFile = File(...), db: Session = Depends(g
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Invalid file format. Please upload an Excel file.")
 
-    # Temporary save file on D drive
-    temp_path = f"d:/Antigravity/Project-timesheet/temp_{file.filename}"
+    # Temporary save file in the current directory
+    temp_path = os.path.join(os.getcwd(), f"temp_{file.filename}")
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 

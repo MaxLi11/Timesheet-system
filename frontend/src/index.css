@@ -50,15 +50,26 @@ body {
 }
 
 .logo {
-  font-size: 1.5rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
+  font-size: 1.7rem;
+  font-weight: 900;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #22d3ee 100%);
+  background-size: 200% 200%;
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 0.8rem;
+  margin-bottom: 2rem;
+  letter-spacing: -0.04em;
+  animation: logoGradient 8s ease infinite;
+  text-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+@keyframes logoGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 .nav-section {
@@ -274,7 +285,7 @@ button:hover {
 
 /* Layout helpers */
 .main-charts {
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 1fr;
 }
 
 @media (max-width: 1024px) {

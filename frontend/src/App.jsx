@@ -21,9 +21,10 @@ dayjs.extend(isoWeek);
 import * as XLSX from 'xlsx';
 import * as dataHelper from './utils/dataHelper';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
 const App = () => {
   const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   // Global Dashboard & Timeline filters
   const [dashYear, setDashYear] = useState('');
@@ -72,7 +73,8 @@ const App = () => {
       pendingApprover: '未操作者', pendingCount: '待审条数', pendingHours: '待审工时',
       noApprovalIssues: '当前筛选周期内没有待审批工时。',
       filterProject: '筛选项目（可多选）', filterApprover: '筛选未操作者',
-      allApprovers: '全部人员', selectAll: '全选', clearAll: '清空'
+      allApprovers: '全部人员', selectAll: '全选', clearAll: '清空',
+      rankingTitle: '项目工时排名', avgMonthlyHours: '月均工时'
     },
     en: {
       dashboard: 'Dashboard', stats: 'Statistics', timeline: 'Timeline', activity: 'Activity',
@@ -96,23 +98,24 @@ const App = () => {
       pendingApprover: 'Pending Approver', pendingCount: 'Pending Count', pendingHours: 'Pending Hours',
       noApprovalIssues: 'No pending approvals in the selected period.',
       filterProject: 'Filter Projects (multi-select)', filterApprover: 'Filter Approver',
-      allApprovers: 'All Approvers', selectAll: 'All', clearAll: 'Clear'
+      allApprovers: 'All Approvers', selectAll: 'All', clearAll: 'Clear',
+      rankingTitle: 'Project Hours Ranking', avgMonthlyHours: 'Avg. Monthly Hours'
     }
   }[lang];
 
   const checkConnection = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/ping');
+      const res = await fetch(`${API_BASE_URL}/ping`);
       if (res.ok) setStatus('connected');
       else setStatus('error');
-    } catch (err) {
-      setStatus('error');
+    } catch {
+      // ignore
     }
   };
 
   const fetchReportingData = useCallback(async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/reporting-rate');
+      const res = await fetch(`${API_BASE_URL}/reporting-rate`);
       if (!res.ok) return;
       const json = await res.json();
       setReportingData(json);
@@ -123,7 +126,7 @@ const App = () => {
 
   const fetchApprovalData = useCallback(async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/approval-rate');
+      const res = await fetch(`${API_BASE_URL}/approval-rate`);
       if (!res.ok) return;
       const json = await res.json();
       setApprovalData(json);
@@ -135,7 +138,7 @@ const App = () => {
   const fetchData = useCallback(async () => {
     try {
       // setLoading(true); // Temporarily removing loading to clear lint warning, or keep it but use it in UI.
-      const res = await fetch('http://127.0.0.1:8000/stats');
+      const res = await fetch(`${API_BASE_URL}/stats`);
       if (!res.ok) throw new Error('Backend responded with error');
       const json = await res.json();
       setData(json);
@@ -163,8 +166,7 @@ const App = () => {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      setLoading(true);
-      const res = await fetch('http://127.0.0.1:8000/upload', { method: 'POST', body: formData });
+      const res = await fetch(`${API_BASE_URL}/upload`, { method: 'POST', body: formData });
       const result = await res.json();
       if (!res.ok) throw new Error(result.detail || result.message || 'Upload failed');
       alert(`${t.success} ${result.rows_processed} rows.`);
@@ -173,8 +175,6 @@ const App = () => {
       fetchApprovalData();
     } catch (err) {
       alert(`${t.uploadFailed}: ${err.message}`);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -309,7 +309,7 @@ const App = () => {
         const itemDate = dayjs(item.start_date);
         if (dashYear && itemDate.year().toString() !== dashYear) return false;
         if (dashMonth && (itemDate.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
-        if (dashWeek && itemDate.isoWeek().toString() !== dashWeek) return false;
+        if (dashWeek && itemDate.isoWeek().toString().padStart(2, '0') !== dashWeek) return false;
       }
       // Dept & Project multi-select
       if (dashSelectedDepts.size > 0 && !dashSelectedDepts.has(item.department)) return false;
@@ -328,7 +328,7 @@ const App = () => {
       const d = dayjs(item.start_date);
       if (dashYear && d.year().toString() !== dashYear) return false;
       if (dashMonth && (d.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
-      if (dashWeek && d.isoWeek().toString() !== dashWeek) return false;
+      if (dashWeek && d.isoWeek().toString().padStart(2, '0') !== dashWeek) return false;
       return true;
     });
     return Array.from(new Set(timeFiltered.map(i => i.department).filter(Boolean))).sort();
@@ -345,7 +345,7 @@ const App = () => {
         const d = dayjs(item.start_date);
         if (dashYear && d.year().toString() !== dashYear) return false;
         if (dashMonth && (d.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
-        if (dashWeek && d.isoWeek().toString() !== dashWeek) return false;
+        if (dashWeek && d.isoWeek().toString().padStart(2, '0') !== dashWeek) return false;
       }
       if (dashSelectedDepts.size > 0 && !dashSelectedDepts.has(item.department)) return false;
       return true;
@@ -384,7 +384,13 @@ const App = () => {
     // The instruction provided `const projNames = Object.keys(agg); const periods = Array.from(new Set(projNames.flatMap(p => Object.keys(agg[p])))).sort();`
     // which suggests a different `agg` structure. Assuming the original `agg` structure is correct for ECharts.
     return {
-      tooltip: { trigger: 'axis', backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#6366f1', textStyle: { color: '#fff' } },
+      tooltip: { 
+        trigger: 'item', 
+        formatter: (params) => `${params.seriesName}<br/>${params.name}: ${params.value} h`,
+        backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+        borderColor: '#6366f1', 
+        textStyle: { color: '#fff' } 
+      },
       legend: { data: agg.projects, textStyle: { color: '#94a3b8' }, top: 0, type: 'scroll' },
       grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
       xAxis: { type: 'category', data: agg.labels, axisLabel: { color: '#94a3b8' } },
@@ -393,22 +399,93 @@ const App = () => {
     };
   }, [filteredData, dashYear, dashMonth, dashWeek]);
 
-  const pieChartOpt = useMemo(() => {
+  const rankingChartOpt = useMemo(() => {
     const grouped = dataHelper.groupByField(filteredData, 'project_name');
+    const sorted = grouped.sort((a, b) => b.value - a.value).slice(0, 30);
+    const topProjNames = new Set(sorted.map(i => i.name));
+
+    // Calculate monthly average for these projects
+    const projMonthlyData = {}; // { projName: Set of months }
+    filteredData.forEach(item => {
+      if (topProjNames.has(item.project_name)) {
+        if (!projMonthlyData[item.project_name]) projMonthlyData[item.project_name] = new Set();
+        projMonthlyData[item.project_name].add(dayjs(item.start_date).format('YYYY-MM'));
+      }
+    });
+
+    const avgData = sorted.map(i => {
+      const monthCount = (projMonthlyData[i.name]?.size || 1);
+      return parseFloat((i.value / monthCount).toFixed(1));
+    });
+    
     return {
-      tooltip: { trigger: 'item' },
-      series: [{
-        type: 'pie',
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: false,
-        itemStyle: { borderRadius: 10, borderColor: '#1e293b', borderWidth: 2 },
-        label: { show: false },
-        data: grouped.slice(0, 10) // Top 10
-      }]
+      tooltip: { 
+        trigger: 'axis', 
+        axisPointer: { type: 'shadow' },
+        backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+        borderColor: '#6366f1', 
+        textStyle: { color: '#fff' },
+        formatter: (params) => {
+          let res = `${params[0].name}<br/>`;
+          params.forEach(p => {
+            res += `${p.marker} ${p.seriesName}: ${p.value} h<br/>`;
+          });
+          return res;
+        }
+      },
+      legend: { data: [t.totalHours, t.avgMonthlyHours], textStyle: { color: '#94a3b8' }, top: 0 },
+      grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
+      xAxis: { 
+        type: 'category', 
+        data: sorted.map(i => i.name),
+        axisLabel: { 
+          color: '#94a3b8', 
+          rotate: sorted.length > 5 ? 30 : 0,
+          interval: 0
+        }
+      },
+      yAxis: [
+        { 
+          type: 'value', 
+          name: t.totalHours,
+          axisLabel: { color: '#94a3b8' },
+          splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } 
+        },
+        {
+          type: 'value',
+          name: t.avgMonthlyHours,
+          axisLabel: { color: '#22d3ee' },
+          splitLine: { show: false }
+        }
+      ],
+      series: [
+        {
+          name: t.totalHours,
+          type: 'bar',
+          data: sorted.map(i => i.value),
+          itemStyle: {
+            borderRadius: [5, 5, 0, 0],
+            color: {
+              type: 'linear',
+              x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [{ offset: 0, color: '#6366f1' }, { offset: 1, color: '#a855f7' }]
+            }
+          },
+          emphasis: { focus: 'series' }
+        },
+        {
+          name: t.avgMonthlyHours,
+          type: 'line',
+          yAxisIndex: 1,
+          smooth: true,
+          data: avgData,
+          itemStyle: { color: '#22d3ee' },
+          lineStyle: { width: 3, shadowBlur: 10, shadowColor: 'rgba(34, 211, 238, 0.5)' },
+          emphasis: { focus: 'series' }
+        }
+      ]
     };
-  }, [filteredData]);
-
-
+  }, [filteredData, t.totalHours, t.avgMonthlyHours]);
 
   const ganttOpt = useMemo(() => {
     const projData = {};
@@ -458,8 +535,8 @@ const App = () => {
     <div className="app-container">
       <aside className="sidebar">
         <div className="logo">
-          <Zap size={32} color="#6366f1" fill="#6366f1" />
-          <span>Antigravity</span>
+          <Calendar size={32} color="#6366f1" fill="rgba(99, 102, 241, 0.2)" />
+          <span>AnxShowtime</span>
         </div>
 
         <nav className="nav-section">
@@ -498,22 +575,33 @@ const App = () => {
 
       <main className="main-content">
         <header className="header">
-          <div>
-            <h1>{activeTab === 'reporting' ? t.reportingTitle : activeTab === 'approval' ? t.approvalTitle : t.title}</h1>
-            <p className="subtitle">{activeTab === 'reporting' ? t.reportingSubtitle : activeTab === 'approval' ? t.approvalSubtitle : t.subtitle}</p>
-          </div>
-          <button onClick={fetchData} className="refresh-btn"><RefreshCcw size={16} /> {t.sync}</button>
+          {activeTab !== 'overview' && (
+            <>
+              <div>
+                <h1>{activeTab === 'reporting' ? t.reportingTitle : activeTab === 'approval' ? t.approvalTitle : t.title}</h1>
+                <p className="subtitle">{activeTab === 'reporting' ? t.reportingSubtitle : activeTab === 'approval' ? t.approvalSubtitle : t.subtitle}</p>
+              </div>
+              <button onClick={fetchData} className="refresh-btn"><RefreshCcw size={16} /> {t.sync}</button>
+            </>
+          )}
         </header>
 
         {(activeTab === 'reporting' || activeTab === 'approval') && (
           <div className="filters-bar" style={{ display: 'none' }} />
         )}
 
+        {activeTab === 'overview' && (
+          <div className="stats-grid" style={{ marginBottom: '1.5rem', marginTop: '0.5rem' }}>
+            <div className="card"><h3>{t.totalHours}</h3><p className="stat-value primary">{filteredData.reduce((a, b) => a + b.hours, 0).toFixed(1)} h</p></div>
+            <div className="card"><h3>{t.avgProject}</h3><p className="stat-value accent">{(filteredData.reduce((a, b) => a + b.hours, 0) / (dashAvailableProjects.length || 1)).toFixed(1)} h</p></div>
+            <div className="card"><h3>{t.dataPoints}</h3><p className="stat-value success">{filteredData.length}</p></div>
+          </div>
+        )}
+
         {activeTab !== 'reporting' && activeTab !== 'approval' && (
           <div className="reporting-tab" style={{ background: 'transparent', boxShadow: 'none', padding: 0 }}>
-            {/* Top controls: Period and action buttons could go here if needed */}
-            <div className="reporting-top-bar" style={{ marginBottom: dashAvailableDepts.length > 0 ? '0.5rem' : '1.5rem' }}>
-              <div className="reporting-filters">
+            <div className="reporting-top-bar" style={{ marginBottom: '1.5rem' }}>
+              <div className="reporting-filters" style={{ flexWrap: 'wrap', gap: '1rem' }}>
                 <div className="filter-group">
                   <label>{t.selectYear}</label>
                   <select value={dashYear} onChange={e => { setDashYear(e.target.value); setDashMonth(''); setDashWeek(''); }}>
@@ -545,91 +633,89 @@ const App = () => {
                     </select>
                   </div>
                 )}
+
+                {/* Department Multi-select Dropdown */}
+                <div className="filter-group dropdown-container">
+                  <label>{t.filterDept}</label>
+                  <button 
+                    className="dropdown-button" 
+                    onClick={() => { setDashDeptOpen(!dashDeptOpen); setDashProjOpen(false); }}
+                  >
+                    {dashSelectedDepts.size === 0 ? (t.allDepts || '全部部门') : `已选择 ${dashSelectedDepts.size} 项`}
+                    <ChevronDown size={16} />
+                  </button>
+                  {dashDeptOpen && (
+                    <>
+                      <div className="dropdown-overlay" onClick={() => setDashDeptOpen(false)} />
+                      <div className="approval-project-panel">
+                        <div className="project-panel-header">
+                          <span className="filter-group-label">{t.filterDept}</span>
+                          <div className="project-panel-btns">
+                            <button onClick={() => setDashSelectedDepts(new Set(dashAvailableDepts))}>{t.selectAll || '全选'}</button>
+                            <button onClick={() => setDashSelectedDepts(new Set())}>{t.clearAll || '清空'}</button>
+                          </div>
+                        </div>
+                        <div className="project-checkboxes">
+                          {dashAvailableDepts.map(dept => (
+                            <label key={dept} className={`project-chip ${dashSelectedDepts.has(dept) ? 'selected' : ''}`}>
+                              <input type="checkbox" checked={dashSelectedDepts.has(dept)} onChange={() => toggleDashDept(dept)} />
+                              {dept}
+                            </label>
+                          ))}
+                          {dashAvailableDepts.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无部门数据</span>}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Project Multi-select Dropdown */}
+                <div className="filter-group dropdown-container">
+                  <label>{t.filterProject}</label>
+                  <button 
+                    className="dropdown-button" 
+                    onClick={() => { setDashProjOpen(!dashProjOpen); setDashDeptOpen(false); }}
+                  >
+                    {dashSelectedProjects.size === 0 ? (t.allProjects || '全部项目') : `已选择 ${dashSelectedProjects.size} 项`}
+                    <ChevronDown size={16} />
+                  </button>
+                  {dashProjOpen && (
+                    <>
+                      <div className="dropdown-overlay" onClick={() => setDashProjOpen(false)} />
+                      <div className="approval-project-panel">
+                        <div className="project-panel-header">
+                          <span className="filter-group-label">{t.filterProject}</span>
+                          <div className="project-panel-btns">
+                            <button onClick={() => setDashSelectedProjects(new Set(dashAvailableProjects))}>{t.selectAll || '全选'}</button>
+                            <button onClick={() => setDashSelectedProjects(new Set())}>{t.clearAll || '清空'}</button>
+                          </div>
+                        </div>
+                        <div className="project-checkboxes">
+                          {dashAvailableProjects.map(proj => (
+                            <label key={proj} className={`project-chip ${dashSelectedProjects.has(proj) ? 'selected' : ''}`}>
+                              <input type="checkbox" checked={dashSelectedProjects.has(proj)} onChange={() => toggleDashProject(proj)} />
+                              {proj}
+                            </label>
+                          ))}
+                          {dashAvailableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-
-            {/* Department Multi-select Dropdown */}
-            <div className="filter-group dropdown-container" style={{ margin: '0 0.5rem' }}>
-              <label>{t.filterDept}</label>
-              <button 
-                className="dropdown-button" 
-                onClick={() => { setDashDeptOpen(!dashDeptOpen); setDashProjOpen(false); }}
-              >
-                {dashSelectedDepts.size === 0 ? (t.allDepts || '全部部门') : `已选择 ${dashSelectedDepts.size} 项`}
-                <ChevronDown size={16} />
-              </button>
-              {dashDeptOpen && (
-                <>
-                  <div className="dropdown-overlay" onClick={() => setDashDeptOpen(false)} />
-                  <div className="approval-project-panel">
-                    <div className="project-panel-header">
-                      <span className="filter-group-label">{t.filterDept}</span>
-                      <div className="project-panel-btns">
-                        <button onClick={() => setDashSelectedDepts(new Set(dashAvailableDepts))}>{t.selectAll || '全选'}</button>
-                        <button onClick={() => setDashSelectedDepts(new Set())}>{t.clearAll || '清空'}</button>
-                      </div>
-                    </div>
-                    <div className="project-checkboxes">
-                      {dashAvailableDepts.map(dept => (
-                        <label key={dept} className={`project-chip ${dashSelectedDepts.has(dept) ? 'selected' : ''}`}>
-                          <input type="checkbox" checked={dashSelectedDepts.has(dept)} onChange={() => toggleDashDept(dept)} />
-                          {dept}
-                        </label>
-                      ))}
-                      {dashAvailableDepts.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无部门数据</span>}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Project Multi-select Dropdown */}
-            <div className="filter-group dropdown-container" style={{ margin: '0 0.5rem' }}>
-              <label>{t.filterProject}</label>
-              <button 
-                className="dropdown-button" 
-                onClick={() => { setDashProjOpen(!dashProjOpen); setDashDeptOpen(false); }}
-              >
-                {dashSelectedProjects.size === 0 ? (t.allProjects || '全部项目') : `已选择 ${dashSelectedProjects.size} 项`}
-                <ChevronDown size={16} />
-              </button>
-              {dashProjOpen && (
-                <>
-                  <div className="dropdown-overlay" onClick={() => setDashProjOpen(false)} />
-                  <div className="approval-project-panel">
-                    <div className="project-panel-header">
-                      <span className="filter-group-label">{t.filterProject}</span>
-                      <div className="project-panel-btns">
-                        <button onClick={() => setDashSelectedProjects(new Set(dashAvailableProjects))}>{t.selectAll || '全选'}</button>
-                        <button onClick={() => setDashSelectedProjects(new Set())}>{t.clearAll || '清空'}</button>
-                      </div>
-                    </div>
-                    <div className="project-checkboxes">
-                      {dashAvailableProjects.map(proj => (
-                        <label key={proj} className={`project-chip ${dashSelectedProjects.has(proj) ? 'selected' : ''}`}>
-                          <input type="checkbox" checked={dashSelectedProjects.has(proj)} onChange={() => toggleDashProject(proj)} />
-                          {proj}
-                        </label>
-                      ))}
-                      {dashAvailableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
           </div>
         )}
 
         {activeTab === 'overview' && (
           <>
-            <div className="stats-grid">
-              <div className="card"><h3>{t.totalHours}</h3><p className="stat-value primary">{filteredData.reduce((a, b) => a + b.hours, 0).toFixed(1)} h</p></div>
-              <div className="card"><h3>{t.avgProject}</h3><p className="stat-value accent">{(filteredData.reduce((a, b) => a + b.hours, 0) / (dashAvailableProjects.length || 1)).toFixed(1)} h</p></div>
-              <div className="card"><h3>{t.dataPoints}</h3><p className="stat-value success">{filteredData.length}</p></div>
-            </div>
             <div className="stats-grid main-charts">
-              <div className="card"><h3>{t.trendTitle}</h3><ReactECharts option={trendChartOpt} style={{ height: '350px' }} /></div>
-              <div className="card"><h3>{t.distTitle}</h3><ReactECharts option={pieChartOpt} style={{ height: '350px' }} /></div>
+              <div className="card"><h3>{t.trendTitle}</h3><ReactECharts option={trendChartOpt} style={{ height: '350px' }} notMerge={true} /></div>
+            </div>
+            <div className="card" style={{ marginTop: '1.5rem' }}>
+              <h3>{t.rankingTitle}</h3>
+              <ReactECharts option={rankingChartOpt} style={{ height: '400px' }} notMerge={true} />
             </div>
           </>
         )}
