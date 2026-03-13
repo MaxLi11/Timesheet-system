@@ -626,20 +626,13 @@ const App = () => {
         <header className="header">
           <div>
             <h1>
-              {activeTab === 'overview' ? `Hello, ${t.title}` :
+              {activeTab === 'overview' ? t.title :
                activeTab === 'reporting' ? t.reportingTitle : 
                activeTab === 'approval' ? t.approvalTitle : 
                activeTab === 'project_analysis' ? t.deptContribution : 
                t.title}
             </h1>
-            <p className="subtitle">
-              {activeTab === 'overview' ? 'Welcome back! Here is your team summary.' :
-               activeTab === 'reporting' ? t.reportingSubtitle : 
-               activeTab === 'approval' ? t.approvalSubtitle : 
-               'Departmental workload and collaboration insights.'}
-            </p>
           </div>
-          <button onClick={fetchData} className="refresh-btn">{t.sync}</button>
         </header>
 
         {(activeTab === 'reporting' || activeTab === 'approval') && (
