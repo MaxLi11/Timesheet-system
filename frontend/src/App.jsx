@@ -546,27 +546,39 @@ const App = () => {
     return {
       tooltip: {
         trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        backgroundColor: 'rgba(15, 23, 42, 0.9)',
-        borderColor: '#6366f1',
-        textStyle: { color: '#fff' },
+        backgroundColor: '#ffffff',
+        borderColor: '#e5e7eb',
+        borderWidth: 1,
+        textStyle: { color: '#111827', fontWeight: 600 },
+        padding: [10, 15],
+        extraCssText: 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-radius: 12px;',
         formatter: (params) => {
-          let res = `${params[0].name}<br/>`;
+          let res = `<div style="margin-bottom: 5px; font-weight: 800;">${params[0].name}</div>`;
           let total = 0;
-          params.forEach(p => total += p.value);
+          params.forEach(p => total += (p.value || 0));
           params.forEach(p => {
-            const percent = total > 0 ? ((p.value / total) * 100).toFixed(1) : 0;
-            res += `${p.marker} ${p.seriesName}: ${p.value} h (${percent}%)<br/>`;
+            const val = p.value || 0;
+            const percent = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+            res += `<div style="display:flex; justify-content:space-between; gap:15px; margin-bottom:2px;">
+                      <span>${p.marker} ${p.seriesName}</span>
+                      <span style="font-weight:700;">${val} h (${percent}%)</span>
+                    </div>`;
           });
-          res += `<strong>Total: ${total.toFixed(1)} h</strong>`;
+          res += `<div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #f1f5f9; font-weight: 800; display:flex; justify-content:space-between;">
+                    <span>Total</span>
+                    <span>${total.toFixed(1)} h</span>
+                  </div>`;
           return res;
         }
       },
-      legend: { textStyle: { color: '#94a3b8' }, type: 'scroll', bottom: 10 },
+      legend: { textStyle: { color: '#6b7280', fontWeight: 600 }, type: 'scroll', bottom: 10 },
       grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
-      xAxis: { type: 'category', data: analysisRes.labels, axisLabel: { color: '#94a3b8' } },
-      yAxis: { type: 'value', name: t.totalHours, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
-      series: analysisRes.series
+      xAxis: { type: 'category', data: analysisRes.labels, axisLabel: { color: '#9ca3af', fontWeight: 600 } },
+      yAxis: { type: 'value', name: t.totalHours, axisLabel: { color: '#9ca3af', fontWeight: 600 }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
+      series: analysisRes.series.map(s => ({
+        ...s,
+        itemStyle: { borderRadius: [4, 4, 0, 0] }
+      }))
     };
   }, [filteredData, dashYear, dashMonth, dashWeek, t.totalHours]);
 
@@ -574,31 +586,25 @@ const App = () => {
     <div className="app-container">
       <aside className="sidebar">
         <div className="logo">
-          <Calendar size={32} color="#6366f1" fill="rgba(99, 102, 241, 0.2)" />
+          <div className="logo-icon">
+            <Calendar size={20} color="#000" />
+          </div>
           <span>AnxShowtime</span>
         </div>
 
         <nav className="nav-section">
-          <div className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}><LayoutDashboard size={20} /> {t.dashboard}</div>
-          <div className={`nav-item ${activeTab === 'project_analysis' ? 'active' : ''}`} onClick={() => setActiveTab('project_analysis')}><BarChart3 size={20} /> {t.projectAnalysis}</div>
-          <div className={`nav-item ${activeTab === 'gantt' ? 'active' : ''}`} onClick={() => setActiveTab('gantt')}><Users size={20} /> {t.timeline}</div>
-          <div className={`nav-item ${activeTab === 'reporting' ? 'active' : ''}`} onClick={() => setActiveTab('reporting')}><ClipboardCheck size={20} /> {t.reporting}</div>
-          <div className={`nav-item ${activeTab === 'approval' ? 'active' : ''}`} onClick={() => setActiveTab('approval')}><CheckCircle2 size={20} /> {t.approval}</div>
+          <div className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}><LayoutDashboard size={20} /> <span>{t.dashboard}</span></div>
+          <div className={`nav-item ${activeTab === 'project_analysis' ? 'active' : ''}`} onClick={() => setActiveTab('project_analysis')}><BarChart3 size={20} /> <span>{t.projectAnalysis}</span></div>
+          <div className={`nav-item ${activeTab === 'gantt' ? 'active' : ''}`} onClick={() => setActiveTab('gantt')}><Users size={20} /> <span>{t.timeline}</span></div>
+          <div className={`nav-item ${activeTab === 'reporting' ? 'active' : ''}`} onClick={() => setActiveTab('reporting')}><ClipboardCheck size={20} /> <span>{t.reporting}</span></div>
+          <div className={`nav-item ${activeTab === 'approval' ? 'active' : ''}`} onClick={() => setActiveTab('approval')}><CheckCircle2 size={20} /> <span>{t.approval}</span></div>
         </nav>
 
         <div className="sidebar-footer">
-          <div className="lang-toggle">
-            <button className={lang === 'zh' ? 'active' : ''} onClick={() => setLang('zh')}>CN</button>
-            <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
-          </div>
-
           <div className="connection-status">
-            <div className="status-dot-container">
-              <div className={`status-dot ${status}`}></div>
-            </div>
+            <div className={`status-dot ${status}`}></div>
             <div className="status-text">
               <span>{t.backend}: {status === 'connected' ? t.connected : status === 'error' ? t.disconnected : t.checking}</span>
-              {status === 'error' && <RefreshCcw size={12} className="refresh-icon" onClick={checkConnection} />}
             </div>
           </div>
 
@@ -607,31 +613,32 @@ const App = () => {
             <span>{t.upload}</span>
             <input type="file" hidden onChange={handleFileUpload} />
           </label>
+          
+          <div className="lang-toggle">
+            <button className={lang === 'zh' ? 'active' : ''} onClick={() => setLang('zh')}>CN</button>
+            <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
+          </div>
         </div>
       </aside>
 
       <main className="main-content">
         <header className="header">
-          {activeTab !== 'overview' && (
-            <>
-              <div>
-                <h1>
-                  {activeTab === 'reporting' ? t.reportingTitle : 
-                   activeTab === 'approval' ? t.approvalTitle : 
-                   activeTab === 'project_analysis' ? t.deptContribution : 
-                   t.title}
-                </h1>
-                {activeTab !== 'project_analysis' && (
-                  <p className="subtitle">
-                    {activeTab === 'reporting' ? t.reportingSubtitle : 
-                     activeTab === 'approval' ? t.approvalSubtitle : 
-                     t.subtitle}
-                  </p>
-                )}
-              </div>
-              <button onClick={fetchData} className="refresh-btn"><RefreshCcw size={16} /> {t.sync}</button>
-            </>
-          )}
+          <div>
+            <h1>
+              {activeTab === 'overview' ? `Hello, ${t.title}` :
+               activeTab === 'reporting' ? t.reportingTitle : 
+               activeTab === 'approval' ? t.approvalTitle : 
+               activeTab === 'project_analysis' ? t.deptContribution : 
+               t.title}
+            </h1>
+            <p className="subtitle">
+              {activeTab === 'overview' ? 'Welcome back! Here is your team summary.' :
+               activeTab === 'reporting' ? t.reportingSubtitle : 
+               activeTab === 'approval' ? t.approvalSubtitle : 
+               'Departmental workload and collaboration insights.'}
+            </p>
+          </div>
+          <button onClick={fetchData} className="refresh-btn">{t.sync}</button>
         </header>
 
         {(activeTab === 'reporting' || activeTab === 'approval') && (
