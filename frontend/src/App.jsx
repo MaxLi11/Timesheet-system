@@ -628,7 +628,6 @@ const App = () => {
         {(activeTab === 'reporting' || activeTab === 'approval') && (
           <div className="filters-bar" style={{ display: 'none' }} />
         )}
-
         {(activeTab === 'overview' || activeTab === 'project_analysis') && (
           <div className="stats-grid" style={{ marginBottom: '1.5rem', marginTop: '0.5rem' }}>
             <div className="card"><h3>{t.totalHours}</h3><p className="stat-value primary">{filteredData.reduce((a, b) => a + b.hours, 0).toFixed(1)} h</p></div>
