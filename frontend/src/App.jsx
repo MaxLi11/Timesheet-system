@@ -624,19 +624,17 @@ const App = () => {
       </aside>
 
       <main className="main-content">
-        {!isEmbed && (
-          <header className="header">
-            <div>
-              <h1>
-                {activeTab === 'overview' ? t.title :
-                 activeTab === 'reporting' ? t.reportingTitle : 
-                 activeTab === 'approval' ? t.approvalTitle : 
-                 activeTab === 'project_analysis' ? t.deptContribution : 
-                 t.title}
-              </h1>
-            </div>
-          </header>
-        )}
+        <header className="header">
+          <div>
+            <h1>
+              {activeTab === 'overview' ? t.title :
+               activeTab === 'reporting' ? t.reportingTitle : 
+               activeTab === 'approval' ? t.approvalTitle : 
+               activeTab === 'project_analysis' ? t.deptContribution : 
+               t.title}
+            </h1>
+          </div>
+        </header>
 
         {(activeTab === 'reporting' || activeTab === 'approval') && (
           <div className="filters-bar" style={{ display: 'none' }} />
