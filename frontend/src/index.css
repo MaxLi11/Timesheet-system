@@ -510,9 +510,9 @@ input[type="checkbox"] {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0;
   margin: 0;
+  margin-right: 4px; /* 强制增加与文字的物理间距 */
   flex-shrink: 0;
   display: inline-block;
-  vertical-align: middle;
 }
 
 input[type="checkbox"]:checked {
@@ -535,17 +535,17 @@ input[type="checkbox"]:checked::after {
 .project-chip {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
+  gap: 16px; /* 进一步增加间距，确保留白充足 */
+  padding: 0.8rem 1.25rem; /* 增加内边距，使点击区域更从容 */
+  border-radius: 10px;
   background: #f8fafc;
   border: 1px solid #f1f5f9;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-weight: 500;
   font-size: 0.85rem;
   color: var(--text-main);
-  line-height: 1.2;
+  line-height: 1; /* 修正对齐 */
 }
 
 .project-chip:hover {
@@ -596,10 +596,10 @@ input[type="checkbox"]:checked::after {
 .project-checkboxes {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  max-height: 300px;
+  gap: 14px; /* 增加项与项之间的间距 */
+  max-height: 350px; /* 稍微增加高度，减少滚动压迫感 */
   overflow-y: auto;
-  padding-right: 5px;
+  padding-right: 8px;
 }
 
 .dropdown-overlay {
