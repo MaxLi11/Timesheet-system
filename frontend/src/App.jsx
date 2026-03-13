@@ -304,7 +304,7 @@ const App = () => {
 
   const filteredData = useMemo(() => {
     // Fast path: no filters active
-    if (!dashYear && dashSelectedDepts.size === 0 && dashSelectedProjects.size === 0) return data;
+    if (!dashYear && !dashMonth && !dashWeek && dashSelectedDepts.size === 0 && dashSelectedProjects.size === 0) return data;
 
     return data.filter(item => {
       // Time filters — only parse date when a time filter is actually set
@@ -536,7 +536,10 @@ const App = () => {
   }, [filteredData]);
 
   const projectAnalysisOpt = useMemo(() => {
-    const periodType = dashWeek ? 'weekly' : 'monthly';
+    let periodType = 'monthly';
+    if (dashWeek || dashMonth) periodType = 'weekly';
+    else if (dashYear) periodType = 'monthly';
+    
     const analysisRes = dataHelper.aggregateProjectDeptData(filteredData, periodType);
     
     return {
@@ -564,7 +567,7 @@ const App = () => {
       yAxis: { type: 'value', name: t.totalHours, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
       series: analysisRes.series
     };
-  }, [filteredData, dashWeek, t.totalHours]);
+  }, [filteredData, dashYear, dashMonth, dashWeek, t.totalHours]);
 
   return (
     <div className="app-container">
