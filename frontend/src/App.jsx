@@ -618,8 +618,19 @@ const App = () => {
           {activeTab !== 'overview' && (
             <>
               <div>
-                <h1>{activeTab === 'reporting' ? t.reportingTitle : activeTab === 'approval' ? t.approvalTitle : t.title}</h1>
-                <p className="subtitle">{activeTab === 'reporting' ? t.reportingSubtitle : activeTab === 'approval' ? t.approvalSubtitle : t.subtitle}</p>
+                <h1>
+                  {activeTab === 'reporting' ? t.reportingTitle : 
+                   activeTab === 'approval' ? t.approvalTitle : 
+                   activeTab === 'project_analysis' ? t.deptContribution : 
+                   t.title}
+                </h1>
+                {activeTab !== 'project_analysis' && (
+                  <p className="subtitle">
+                    {activeTab === 'reporting' ? t.reportingSubtitle : 
+                     activeTab === 'approval' ? t.approvalSubtitle : 
+                     t.subtitle}
+                  </p>
+                )}
               </div>
               <button onClick={fetchData} className="refresh-btn"><RefreshCcw size={16} /> {t.sync}</button>
             </>
@@ -629,7 +640,7 @@ const App = () => {
         {(activeTab === 'reporting' || activeTab === 'approval') && (
           <div className="filters-bar" style={{ display: 'none' }} />
         )}
-        {(activeTab === 'overview' || activeTab === 'project_analysis') && (
+        {activeTab === 'overview' && (
           <div className="stats-grid" style={{ marginBottom: '1.5rem', marginTop: '0.5rem' }}>
             <div className="card"><h3>{t.totalHours}</h3><p className="stat-value primary">{filteredData.reduce((a, b) => a + b.hours, 0).toFixed(1)} h</p></div>
             <div className="card"><h3>{t.avgProject}</h3><p className="stat-value accent">{(filteredData.reduce((a, b) => a + b.hours, 0) / (dashAvailableProjects.length || 1)).toFixed(1)} h</p></div>
