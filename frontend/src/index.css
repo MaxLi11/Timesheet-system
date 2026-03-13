@@ -289,6 +289,40 @@ button:active {
 
 .reporting-filters::-webkit-scrollbar { height: 4px; }
 
+.reporting-stats {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.inline-summary-stats {
+  display: flex;
+  gap: 1.2rem;
+  background: #f1f5f9;
+  padding: 0.5rem 1.2rem;
+  border-radius: 99px;
+  border: 1px solid #e2e8f0;
+}
+
+.inline-summary-stats .stat-item {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.inline-summary-stats .stat-item strong {
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+.inline-summary-stats .stat-item.accent strong { color: #f59e0b; }
+.inline-summary-stats .stat-item.danger strong { color: #ef4444; }
+
 .reporting-actions {
   display: flex;
   align-items: center;

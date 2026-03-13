@@ -947,6 +947,15 @@ const App = () => {
                   )}
                 </div>
               </div>
+              <div className="reporting-stats">
+                {approvalRecords.length > 0 && (
+                  <div className="inline-summary-stats">
+                    <span className="stat-item">{t.pendingApprover} <strong>{approvalRecords.length}</strong></span>
+                    <span className="stat-item accent">{t.pendingCount} <strong>{approvalRecords.reduce((a, r) => a + r.count, 0)}</strong></span>
+                    <span className="stat-item danger">{t.pendingHours} <strong>{approvalRecords.reduce((a, r) => a + r.total_hours, 0).toFixed(1)}h</strong></span>
+                  </div>
+                )}
+              </div>
               <div className="reporting-actions">
                 {approvalRecords.length > 0 && (
                   <button className="export-btn" onClick={exportApprovalExcel}>
@@ -957,22 +966,6 @@ const App = () => {
             </div>
 
 
-            {/* Summary cards */}
-            {approvalRecords.length > 0 && (
-              <div className="approval-summary-cards">
-                <div className="approval-summary-card">
-                  <span className="summary-label">{t.pendingApprover}（{approvalRecords.length} 人）</span>
-                </div>
-                <div className="approval-summary-card accent">
-                  <span className="summary-label">{t.pendingCount}</span>
-                  <span className="summary-value">{approvalRecords.reduce((a, r) => a + r.count, 0)}</span>
-                </div>
-                <div className="approval-summary-card danger">
-                  <span className="summary-label">{t.pendingHours}</span>
-                  <span className="summary-value">{approvalRecords.reduce((a, r) => a + r.total_hours, 0).toFixed(2)}h</span>
-                </div>
-              </div>
-            )}
 
             {approvalRecords.length === 0 ? (
               <div className="card no-issues">{t.noApprovalIssues}</div>
