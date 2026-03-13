@@ -916,6 +916,40 @@ const App = () => {
                     {availableApprovers.map(a => <option key={a} value={a}>{a}</option>)}
                   </select>
                 </div>
+
+                {/* Project Multi-select Dropdown (Approval Tab) */}
+                <div className="filter-group dropdown-container">
+                  <label>{t.filterProject}</label>
+                  <button 
+                    className="dropdown-button" 
+                    onClick={() => { setDashProjOpen(!dashProjOpen); setDashDeptOpen(false); }}
+                  >
+                    {selectedProjects.size === 0 ? (t.allProjects || '全部项目') : `已选择 ${selectedProjects.size} 项`}
+                    <ChevronDown size={16} />
+                  </button>
+                  {dashProjOpen && (
+                    <>
+                      <div className="dropdown-overlay" onClick={() => setDashProjOpen(false)} />
+                      <div className="approval-project-panel">
+                        <div className="project-panel-header">
+                          <span className="filter-group-label">{t.filterProject}</span>
+                          <div className="project-panel-btns">
+                            <button onClick={() => { setSelectedProjects(new Set(availableProjects)); setSelectedApprover(''); }}>{t.selectAll}</button>
+                            <button onClick={() => { setSelectedProjects(new Set()); setSelectedApprover(''); }}>{t.clearAll}</button>
+                          </div>
+                        </div>
+                        <div className="project-checkboxes">
+                          {availableProjects.map(proj => (
+                            <label key={proj} className={`project-chip ${selectedProjects.has(proj) ? 'selected' : ''}`}>
+                              <input type="checkbox" checked={selectedProjects.has(proj)} onChange={() => toggleProject(proj)} />
+                              {proj}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="reporting-actions">
                 {approvalRecords.length > 0 && (
@@ -926,26 +960,6 @@ const App = () => {
               </div>
             </div>
 
-            {/* Project multi-select panel */}
-            {availableProjects.length > 0 && (
-              <div className="approval-project-panel">
-                <div className="project-panel-header">
-                  <span className="filter-group-label">{t.filterProject}</span>
-                  <div className="project-panel-btns">
-                    <button onClick={() => { setSelectedProjects(new Set(availableProjects)); setSelectedApprover(''); }}>{t.selectAll}</button>
-                    <button onClick={() => { setSelectedProjects(new Set()); setSelectedApprover(''); }}>{t.clearAll}</button>
-                  </div>
-                </div>
-                <div className="project-checkboxes">
-                  {availableProjects.map(proj => (
-                    <label key={proj} className={`project-chip ${selectedProjects.has(proj) ? 'selected' : ''}`}>
-                      <input type="checkbox" checked={selectedProjects.has(proj)} onChange={() => toggleProject(proj)} />
-                      {proj}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Summary cards */}
             {approvalRecords.length > 0 && (
