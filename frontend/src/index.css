@@ -498,24 +498,25 @@ button:active {
 
 /* --- Custom Checkbox System --- */
 input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #cbd5e1;
-  border-radius: 4px;
-  background: #ffffff;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 0;
-  margin: 0;
-  flex-shrink: 0;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  width: 20px !important;
+  height: 20px !important;
+  border: 2px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  cursor: pointer !important;
+  position: relative !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  margin-right: 12px !important; /* 第二层留白保护 */
+  flex-shrink: 0 !important;
 }
 
 input[type="checkbox"]:checked {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
 }
 
 input[type="checkbox"]:checked::after {
@@ -531,20 +532,26 @@ input[type="checkbox"]:checked::after {
 }
 
 .project-chip {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 24px; /* 极端增加间距，确保视觉留白绝对充裕 */
-  padding: 0.75rem 1.5rem;
-  border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #f1f5f9;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 24px !important; /* 核心留白 */
+  padding: 0.8rem 1.75rem !important;
+  border-radius: 12px !important;
+  background: #f8fafc !important;
+  border: 2px solid #3b82f6 !important; /* 临时蓝色边框，用于验证部署是否成功 */
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  font-weight: 600;
-  font-size: 0.85rem;
+  transition: all 0.2s;
   color: var(--text-main);
-  line-height: normal; /* 依靠 flex center 自动对齐 */
+}
+
+.chip-label {
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  display: block;
+  padding-top: 1px; /* 像素级对齐补偿 */
+  white-space: nowrap;
 }
 
 .project-chip:hover {

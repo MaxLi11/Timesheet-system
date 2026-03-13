@@ -708,7 +708,7 @@ const App = () => {
                           {dashAvailableDepts.map(dept => (
                             <label key={dept} className={`project-chip ${dashSelectedDepts.has(dept) ? 'selected' : ''}`}>
                               <input type="checkbox" checked={dashSelectedDepts.has(dept)} onChange={() => toggleDashDept(dept)} />
-                              {dept}
+                              <span className="chip-label">{dept}</span>
                             </label>
                           ))}
                           {dashAvailableDepts.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无部门数据</span>}
@@ -743,7 +743,7 @@ const App = () => {
                           {dashAvailableProjects.map(proj => (
                             <label key={proj} className={`project-chip ${dashSelectedProjects.has(proj) ? 'selected' : ''}`}>
                               <input type="checkbox" checked={dashSelectedProjects.has(proj)} onChange={() => toggleDashProject(proj)} />
-                              {proj}
+                              <span className="chip-label">{proj}</span>
                             </label>
                           ))}
                           {dashAvailableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
@@ -937,7 +937,7 @@ const App = () => {
                           {availableProjects.map(proj => (
                             <label key={proj} className={`project-chip ${selectedProjects.has(proj) ? 'selected' : ''}`}>
                               <input type="checkbox" checked={selectedProjects.has(proj)} onChange={() => toggleProject(proj)} />
-                              {proj}
+                              <span className="chip-label">{proj}</span>
                             </label>
                           ))}
                           {availableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
