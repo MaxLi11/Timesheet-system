@@ -24,6 +24,7 @@ import * as dataHelper from './utils/dataHelper';
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '/api');
 
 const App = () => {
+  const isEmbed = useMemo(() => new URLSearchParams(window.location.search).get('embed') === 'true', []);
   const [data, setData] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   // Global Dashboard & Timeline filters
@@ -623,17 +624,19 @@ const App = () => {
       </aside>
 
       <main className="main-content">
-        <header className="header">
-          <div>
-            <h1>
-              {activeTab === 'overview' ? t.title :
-               activeTab === 'reporting' ? t.reportingTitle : 
-               activeTab === 'approval' ? t.approvalTitle : 
-               activeTab === 'project_analysis' ? t.deptContribution : 
-               t.title}
-            </h1>
-          </div>
-        </header>
+        {!isEmbed && (
+          <header className="header">
+            <div>
+              <h1>
+                {activeTab === 'overview' ? t.title :
+                 activeTab === 'reporting' ? t.reportingTitle : 
+                 activeTab === 'approval' ? t.approvalTitle : 
+                 activeTab === 'project_analysis' ? t.deptContribution : 
+                 t.title}
+              </h1>
+            </div>
+          </header>
+        )}
 
         {(activeTab === 'reporting' || activeTab === 'approval') && (
           <div className="filters-bar" style={{ display: 'none' }} />
