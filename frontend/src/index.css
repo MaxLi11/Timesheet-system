@@ -500,8 +500,8 @@ button:active {
 input[type="checkbox"] {
   appearance: none !important;
   -webkit-appearance: none !important;
-  width: 20px !important;
-  height: 20px !important;
+  width: 18px !important;
+  height: 18px !important;
   border: 2px solid #cbd5e1 !important;
   border-radius: 4px !important;
   background: #ffffff !important;
@@ -510,7 +510,6 @@ input[type="checkbox"] {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
   padding: 0 !important;
   margin: 0 !important;
-  margin-right: 12px !important; /* 第二层留白保护 */
   flex-shrink: 0 !important;
 }
 
@@ -522,10 +521,10 @@ input[type="checkbox"]:checked {
 input[type="checkbox"]:checked::after {
   content: '';
   position: absolute;
-  left: 6px;
-  top: 2px;
+  left: 5px;
+  top: 1px;
   width: 4px;
-  height: 9px;
+  height: 8px;
   border: solid #000;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
@@ -534,24 +533,25 @@ input[type="checkbox"]:checked::after {
 .project-chip {
   display: flex !important;
   align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 24px !important; /* 核心留白 */
-  padding: 0.8rem 1.75rem !important;
+  gap: 18px !important; /* 调整为更均衡的 18px */
+  padding: 0.7rem 1.25rem !important;
   border-radius: 12px !important;
   background: #f8fafc !important;
-  border: 2px solid #3b82f6 !important; /* 临时蓝色边框，用于验证部署是否成功 */
+  border: 1px solid #f1f5f9 !important; /* 还原为简洁边框 */
   cursor: pointer;
   transition: all 0.2s;
   color: var(--text-main);
+  min-width: 0; /* 防止溢出 */
 }
 
 .chip-label {
   font-size: 0.85rem !important;
   font-weight: 700 !important;
-  line-height: 1 !important;
+  line-height: normal !important;
   display: block;
-  padding-top: 1px; /* 像素级对齐补偿 */
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .project-chip:hover {
