@@ -500,8 +500,8 @@ button:active {
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: 2px solid #cbd5e1;
   border-radius: 4px;
   background: #ffffff;
@@ -510,9 +510,7 @@ input[type="checkbox"] {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0;
   margin: 0;
-  margin-right: 4px; /* 强制增加与文字的物理间距 */
   flex-shrink: 0;
-  display: inline-block;
 }
 
 input[type="checkbox"]:checked {
@@ -523,10 +521,10 @@ input[type="checkbox"]:checked {
 input[type="checkbox"]:checked::after {
   content: '';
   position: absolute;
-  left: 5px;
-  top: 1px;
+  left: 6px;
+  top: 2px;
   width: 4px;
-  height: 8px;
+  height: 9px;
   border: solid #000;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
@@ -535,17 +533,18 @@ input[type="checkbox"]:checked::after {
 .project-chip {
   display: flex;
   align-items: center;
-  gap: 16px; /* 进一步增加间距，确保留白充足 */
-  padding: 0.8rem 1.25rem; /* 增加内边距，使点击区域更从容 */
-  border-radius: 10px;
+  justify-content: flex-start;
+  gap: 24px; /* 极端增加间距，确保视觉留白绝对充裕 */
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
   background: #f8fafc;
   border: 1px solid #f1f5f9;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.85rem;
   color: var(--text-main);
-  line-height: 1; /* 修正对齐 */
+  line-height: normal; /* 依靠 flex center 自动对齐 */
 }
 
 .project-chip:hover {
