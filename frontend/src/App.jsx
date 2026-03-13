@@ -34,6 +34,7 @@ const App = () => {
   const [dashSelectedProjects, setDashSelectedProjects] = useState(new Set());
   const [dashDeptOpen, setDashDeptOpen] = useState(false);
   const [dashProjOpen, setDashProjOpen] = useState(false);
+  const [appProjOpen, setAppProjOpen] = useState(false);
   const [status, setStatus] = useState('checking'); // 'checking', 'connected', 'error'
   const [lang, setLang] = useState('zh'); // 'zh' or 'en'
   // Reporting Rate state
@@ -922,14 +923,14 @@ const App = () => {
                   <label>{t.filterProject}</label>
                   <button 
                     className="dropdown-button" 
-                    onClick={() => { setDashProjOpen(!dashProjOpen); setDashDeptOpen(false); }}
+                    onClick={() => setAppProjOpen(!appProjOpen)}
                   >
                     {selectedProjects.size === 0 ? (t.allProjects || '全部项目') : `已选择 ${selectedProjects.size} 项`}
                     <ChevronDown size={16} />
                   </button>
-                  {dashProjOpen && (
+                  {appProjOpen && (
                     <>
-                      <div className="dropdown-overlay" onClick={() => setDashProjOpen(false)} />
+                      <div className="dropdown-overlay" onClick={() => setAppProjOpen(false)} />
                       <div className="approval-project-panel">
                         <div className="project-panel-header">
                           <span className="filter-group-label">{t.filterProject}</span>
@@ -945,6 +946,7 @@ const App = () => {
                               {proj}
                             </label>
                           ))}
+                          {availableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
                         </div>
                       </div>
                     </>
