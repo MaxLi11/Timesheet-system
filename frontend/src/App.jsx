@@ -594,10 +594,7 @@ const App = () => {
 
           <div className="connection-status">
             <div className="status-dot-container">
-              <div className="status-dot" style={{
-                background: status === 'connected' ? 'var(--success)' : status === 'error' ? 'var(--danger)' : 'var(--warning)',
-                boxShadow: status === 'connected' ? '0 0 10px var(--success)' : 'none'
-              }}></div>
+              <div className={`status-dot ${status}`}></div>
             </div>
             <div className="status-text">
               <span>{t.backend}: {status === 'connected' ? t.connected : status === 'error' ? t.disconnected : t.checking}</span>
@@ -641,17 +638,17 @@ const App = () => {
           <div className="filters-bar" style={{ display: 'none' }} />
         )}
         {activeTab === 'overview' && (
-          <div className="stats-grid" style={{ marginBottom: '1.5rem', marginTop: '0.5rem' }}>
+          <div className="stats-grid">
             <div className="card"><h3>{t.totalHours}</h3><p className="stat-value primary">{filteredData.reduce((a, b) => a + b.hours, 0).toFixed(1)} h</p></div>
             <div className="card"><h3>{t.avgProject}</h3><p className="stat-value accent">{(filteredData.reduce((a, b) => a + b.hours, 0) / (dashAvailableProjects.length || 1)).toFixed(1)} h</p></div>
             <div className="card"><h3>{t.dataPoints}</h3><p className="stat-value success">{filteredData.length}</p></div>
           </div>
         )}
 
-        {activeTab !== 'reporting' && activeTab !== 'approval' && (
-          <div className="reporting-tab" style={{ background: 'transparent', boxShadow: 'none', padding: 0 }}>
-            <div className="reporting-top-bar" style={{ marginBottom: '1.5rem' }}>
-              <div className="reporting-filters" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+        {(activeTab === 'overview' || activeTab === 'project_analysis') && (
+          <div className="reporting-tab">
+            <div className="reporting-top-bar">
+              <div className="reporting-filters">
                 <div className="filter-group">
                   <label>{t.selectYear}</label>
                   <select value={dashYear} onChange={e => { setDashYear(e.target.value); setDashMonth(''); setDashWeek(''); }}>
@@ -759,7 +756,7 @@ const App = () => {
         )}
 
         {activeTab === 'project_analysis' && (
-          <div className="card" style={{ marginTop: '1.5rem' }}>
+          <div className="card" style={{ marginTop: '2.5rem' }}>
             <h3>{t.deptContribution}</h3>
             <ReactECharts option={projectAnalysisOpt} style={{ height: '500px' }} notMerge={true} />
           </div>
@@ -770,7 +767,7 @@ const App = () => {
             <div className="stats-grid main-charts">
               <div className="card"><h3>{t.trendTitle}</h3><ReactECharts option={trendChartOpt} style={{ height: '350px' }} notMerge={true} /></div>
             </div>
-            <div className="card" style={{ marginTop: '1.5rem' }}>
+            <div className="card" style={{ marginTop: '2.5rem' }}>
               <h3>{t.rankingTitle}</h3>
               <ReactECharts option={rankingChartOpt} style={{ height: '400px' }} notMerge={true} />
             </div>
