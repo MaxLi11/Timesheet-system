@@ -1,0 +1,23 @@
+# Exclude node_modules from build context
+**/node_modules
+**/dist
+**/.git
+**/.next
+**/out
+**/build
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.coverage
+**/htmlcov
+**/database.db-journal
+**/.env
+**/.vscode
+**/.idea
+
+# Local build artifacts
+frontend/dist
+backend/__pycache__

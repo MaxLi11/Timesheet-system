@@ -1,38 +1,44 @@
 # --- Build Frontend ---
 FROM node:18-slim AS frontend-build
 WORKDIR /frontend
+
+# Set environment variables once
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV VITE_API_URL=""
+
+# Better caching for dependencies
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm install --no-update-notifier
+
 COPY frontend/ ./
-# Set temporary API URL to empty to let it use relative paths
-RUN VITE_API_URL="" npm run build
+RUN npm run build
 
 # --- Build Final Image ---
 FROM python:3.9-slim
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
+# Combine installs to reduce layers
+RUN apt-get update && apt-get install -y --no-install-recommends nginx \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Better caching for python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code and DB
+# Copy backend code, DB and frontend build
 COPY backend ./backend
 COPY timesheet.db .
-
-# Copy frontend build to nginx path
 COPY --from=frontend-build /frontend/dist /usr/share/nginx/html
 
-# Nginx config for single port usage
+# Nginx config
 RUN echo 'server { \
     listen 7860; \
-    client_max_body_size 100M; \
+    client_max_body_size 200M; \
     location /api/ { \
         proxy_pass http://localhost:8000/; \
         proxy_set_header Host $host; \
         proxy_set_header X-Real-IP $remote_addr; \
+        proxy_read_timeout 300s; \
     } \
     location / { \
         root /usr/share/nginx/html; \
@@ -41,12 +47,9 @@ RUN echo 'server { \
     } \
 }' > /etc/nginx/sites-available/default
 
-# Start script
-RUN echo '#!/bin/bash\n\
-nginx\n\
-uvicorn backend.main:app --host 0.0.0.0 --port 8000\n\
-' > /app/start.sh && chmod +x /app/start.sh
+# Unified start script
+RUN printf "#!/bin/bash\nnginx\nuvicorn backend.main:app --host 0.0.0.0 --port 8000\n" > /app/start.sh \
+    && chmod +x /app/start.sh
 
-# Hugging Face uses port 7860
 EXPOSE 7860
 CMD ["/app/start.sh"]
