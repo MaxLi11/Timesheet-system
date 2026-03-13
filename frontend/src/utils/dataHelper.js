@@ -319,19 +319,19 @@ export const getApprovalApprovers = (entries, filterYear, filterMonth, selectedP
  * Aggregates data for specific projects, grouped by time and then department.
  * Used for stacked bar charts.
  */
-export const aggregateProjectDeptData = (data, periodType, selectedProjects = []) => {
+export const aggregateProjectDeptData = (data, periodType) => {
     const timeMap = {}; // { '2026-03': { 'DeptA': 10, 'DeptB': 5 } }
     const departments = new Set();
-    const projectFilter = new Set(selectedProjects);
 
     data.forEach(item => {
-        if (!item.start_date || !item.project_name || !item.department) return;
-        if (projectFilter.size > 0 && !projectFilter.has(item.project_name)) return;
+        if (!item.start_date || !item.department) return;
 
         const d = dayjs(item.start_date);
         let timeKey = '';
         if (periodType === 'weekly') {
             timeKey = `${d.year()}-W${String(d.isoWeek()).padStart(2, '0')}`;
+        } else if (periodType === 'quarterly') {
+            timeKey = `${d.year()}-Q${Math.floor(d.month() / 3) + 1}`;
         } else {
             timeKey = d.format('YYYY-MM');
         }
@@ -339,7 +339,7 @@ export const aggregateProjectDeptData = (data, periodType, selectedProjects = []
         if (!timeMap[timeKey]) timeMap[timeKey] = {};
         if (!timeMap[timeKey][item.department]) timeMap[timeKey][item.department] = 0;
         
-        timeMap[timeKey][item.department] += (item.hours || 0);
+        timeMap[timeKey][item.department] += Number(item.hours || 0);
         departments.add(item.department);
     });
 

@@ -539,6 +539,7 @@ const App = () => {
     let periodType = 'monthly';
     if (dashWeek || dashMonth) periodType = 'weekly';
     else if (dashYear) periodType = 'monthly';
+    else periodType = 'quarterly'; // all data view
     
     const analysisRes = dataHelper.aggregateProjectDeptData(filteredData, periodType);
     
