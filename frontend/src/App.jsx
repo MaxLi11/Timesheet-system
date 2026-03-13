@@ -32,10 +32,8 @@ const App = () => {
   const [dashWeek, setDashWeek] = useState('');
   const [dashSelectedDepts, setDashSelectedDepts] = useState(new Set());
   const [dashSelectedProjects, setDashSelectedProjects] = useState(new Set());
-  const [dashAnalysisSelectedProjects, setDashAnalysisSelectedProjects] = useState(new Set());
   const [dashDeptOpen, setDashDeptOpen] = useState(false);
   const [dashProjOpen, setDashProjOpen] = useState(false);
-  const [dashAnalysisProjOpen, setDashAnalysisProjOpen] = useState(false);
   const [status, setStatus] = useState('checking'); // 'checking', 'connected', 'error'
   const [lang, setLang] = useState('zh'); // 'zh' or 'en'
   // Reporting Rate state
@@ -376,14 +374,6 @@ const App = () => {
     });
   };
 
-  const toggleDashAnalysisProject = (proj) => {
-    setDashAnalysisSelectedProjects(prev => {
-      const next = new Set(prev);
-      if (next.has(proj)) next.delete(proj); else next.add(proj);
-      return next;
-    });
-  };
-
   const trendChartOpt = useMemo(() => {
     // Determine aggregation dynamically based on what's selected
     let aggType = 'monthly';
@@ -547,7 +537,7 @@ const App = () => {
 
   const projectAnalysisOpt = useMemo(() => {
     const periodType = dashWeek ? 'weekly' : 'monthly';
-    const analysisRes = dataHelper.aggregateProjectDeptData(data, periodType, [...dashAnalysisSelectedProjects]);
+    const analysisRes = dataHelper.aggregateProjectDeptData(filteredData, periodType);
     
     return {
       tooltip: {
@@ -574,7 +564,7 @@ const App = () => {
       yAxis: { type: 'value', name: t.totalHours, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
       series: analysisRes.series
     };
-  }, [data, dashAnalysisSelectedProjects, dashWeek, t.totalHours]);
+  }, [filteredData, dashWeek, t.totalHours]);
 
   return (
     <div className="app-container">
@@ -749,43 +739,6 @@ const App = () => {
                     </>
                   )}
                 </div>
-
-                {/* Project Analysis Specific Filter */}
-                {activeTab === 'project_analysis' && (
-                  <div className="filter-group dropdown-container">
-                    <label>{t.selectProjects}</label>
-                    <button 
-                      className="dropdown-button" 
-                      onClick={() => { setDashAnalysisProjOpen(!dashAnalysisProjOpen); setDashDeptOpen(false); setDashProjOpen(false); }}
-                    >
-                      {dashAnalysisSelectedProjects.size === 0 ? (t.allProjects || '全部项目') : `已选择 ${dashAnalysisSelectedProjects.size} 项`}
-                      <ChevronDown size={16} />
-                    </button>
-                    {dashAnalysisProjOpen && (
-                      <>
-                        <div className="dropdown-overlay" onClick={() => setDashAnalysisProjOpen(false)} />
-                        <div className="approval-project-panel">
-                          <div className="project-panel-header">
-                            <span className="filter-group-label">{t.selectProjects}</span>
-                            <div className="project-panel-btns">
-                              <button onClick={() => setDashAnalysisSelectedProjects(new Set(dashAvailableProjects))}>{t.selectAll || '全选'}</button>
-                              <button onClick={() => setDashAnalysisSelectedProjects(new Set())}>{t.clearAll || '清空'}</button>
-                            </div>
-                          </div>
-                          <div className="project-checkboxes">
-                            {dashAvailableProjects.map(proj => (
-                              <label key={proj} className={`project-chip ${dashAnalysisSelectedProjects.has(proj) ? 'selected' : ''}`}>
-                                <input type="checkbox" checked={dashAnalysisSelectedProjects.has(proj)} onChange={() => toggleDashAnalysisProject(proj)} />
-                                {proj}
-                              </label>
-                            ))}
-                            {dashAvailableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </div>
