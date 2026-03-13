@@ -499,17 +499,20 @@ button:active {
 /* --- Custom Checkbox System --- */
 input[type="checkbox"] {
   appearance: none;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #e2e8f0;
-  border-radius: 6px;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #cbd5e1;
+  border-radius: 4px;
   background: #ffffff;
   cursor: pointer;
   position: relative;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0;
   margin: 0;
-  box-shadow: none;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 input[type="checkbox"]:checked {
@@ -522,8 +525,8 @@ input[type="checkbox"]:checked::after {
   position: absolute;
   left: 5px;
   top: 1px;
-  width: 5px;
-  height: 9px;
+  width: 4px;
+  height: 8px;
   border: solid #000;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
@@ -532,16 +535,17 @@ input[type="checkbox"]:checked::after {
 .project-chip {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0.75rem 1.25rem;
-  border-radius: var(--radius-sm);
+  gap: 12px;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
   background: #f8fafc;
   border: 1px solid #f1f5f9;
   cursor: pointer;
   transition: all 0.2s;
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-weight: 500;
+  font-size: 0.85rem;
   color: var(--text-main);
+  line-height: 1.2;
 }
 
 .project-chip:hover {
