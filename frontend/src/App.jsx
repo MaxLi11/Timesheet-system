@@ -56,7 +56,7 @@ const App = () => {
     zh: {
       dashboard: '仪表盘', stats: '统计分析', timeline: '项目时间轴', activity: '活跃度',
       reporting: '完整填报率', approval: '审批完成率',
-      title: '工时洞察', subtitle: '实时的工时统计与分析', sync: '同步数据', filters: '筛选:',
+      title: '仪表盘', subtitle: '实时的工时统计与分析', sync: '同步数据', filters: '筛选',
       reportingTitle: '完整填报率', reportingSubtitle: '筛选工时填报差异信息',
       approvalTitle: '审批完成率', approvalSubtitle: '统计待审批工时信息',
       period: { weekly: '周统计', monthly: '月统计', quarterly: '季度统计' },
