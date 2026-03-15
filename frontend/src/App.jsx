@@ -5,9 +5,6 @@ import {
   BarChart3,
   Calendar,
   Users,
-  RefreshCcw,
-  Zap,
-  Filter,
   ChevronDown,
   ChevronRight,
   FileDown,
@@ -22,6 +19,41 @@ import * as XLSX from 'xlsx';
 import * as dataHelper from './utils/dataHelper';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '/api');
+const EDITORIAL_THEME = {
+  graphite: '#162033',
+  slate: '#4f6078',
+  slateSoft: '#7687a5',
+  mist: '#d7e0ef',
+  paper: '#eaf0fb',
+  cloud: '#ffffff',
+  border: 'rgba(115, 138, 176, 0.18)',
+  splitLine: 'rgba(128, 152, 188, 0.18)',
+  accent: '#4d72ff',
+  accentSoft: '#dce5ff',
+  brass: '#ff8b4b',
+  brassSoft: '#ffe3d4',
+  sage: '#69a4ff',
+  danger: '#eb6a5b',
+  tooltipShadow: '0 20px 48px rgba(48, 70, 112, 0.16)',
+  palette: ['#4d72ff', '#7aa6ff', '#ff8b4b', '#6fbfff', '#6b8dff', '#ffb36e']
+};
+
+const tooltipBase = {
+  backgroundColor: EDITORIAL_THEME.cloud,
+  borderColor: EDITORIAL_THEME.border,
+  borderWidth: 1,
+  padding: [12, 14],
+  textStyle: {
+    color: EDITORIAL_THEME.graphite,
+    fontWeight: 600,
+    fontFamily: '"IBM Plex Sans", "Noto Sans SC", sans-serif'
+  },
+  extraCssText: `box-shadow: ${EDITORIAL_THEME.tooltipShadow}; border-radius: 16px;`
+};
+
+const chartText = { color: EDITORIAL_THEME.slateSoft, fontWeight: 600 };
+const chartAxis = { color: EDITORIAL_THEME.slateSoft, fontWeight: 500 };
+const chartSplitLine = { lineStyle: { color: EDITORIAL_THEME.splitLine } };
 
 const App = () => {
   const isEmbed = useMemo(() => new URLSearchParams(window.location.search).get('embed') === 'true', []);
@@ -108,6 +140,90 @@ const App = () => {
       selectProjects: 'Select Projects'
     }
   }[lang];
+
+  const uiText = {
+    zh: {
+      workspace: '工时智能工作台',
+      currentView: '当前视图',
+      activeFilters: '已启用筛选',
+      visibleProjects: '可见项目',
+      visibleDepts: '可见部门',
+      topDept: '重点部门',
+      periodRange: '周期范围',
+      deptGroups: '部门分组',
+      liveSync: '在线同步',
+      allPeriods: '全部周期'
+    },
+    en: {
+      workspace: 'Time Intelligence Workspace',
+      currentView: 'Current View',
+      activeFilters: 'Active Filters',
+      visibleProjects: 'Visible Projects',
+      visibleDepts: 'Visible Depts',
+      topDept: 'Top Dept',
+      periodRange: 'Period Range',
+      deptGroups: 'Dept Groups',
+      liveSync: 'Live Sync',
+      allPeriods: 'All Periods'
+    }
+  }[lang];
+
+  const pageMeta = useMemo(() => {
+    const metaByTab = {
+      overview: {
+        eyebrow: t.dashboard,
+        title: t.title,
+        description: t.subtitle
+      },
+      project_analysis: {
+        eyebrow: t.projectAnalysis,
+        title: t.deptContribution,
+        description: t.selectProjects
+      },
+      gantt: {
+        eyebrow: t.timeline,
+        title: t.ganttTitle,
+        description: t.subtitle
+      },
+      reporting: {
+        eyebrow: t.reporting,
+        title: t.reportingTitle,
+        description: t.reportingSubtitle
+      },
+      approval: {
+        eyebrow: t.approval,
+        title: t.approvalTitle,
+        description: t.approvalSubtitle
+      }
+    };
+    return metaByTab[activeTab] || metaByTab.overview;
+  }, [
+    activeTab,
+    t.approval,
+    t.approvalSubtitle,
+    t.approvalTitle,
+    t.dashboard,
+    t.deptContribution,
+    t.ganttTitle,
+    t.projectAnalysis,
+    t.reporting,
+    t.reportingSubtitle,
+    t.reportingTitle,
+    t.selectProjects,
+    t.subtitle,
+    t.timeline,
+    t.title
+  ]);
+
+  const navItems = useMemo(() => ([
+    { id: 'overview', label: t.dashboard, icon: LayoutDashboard },
+    { id: 'project_analysis', label: t.projectAnalysis, icon: BarChart3 },
+    { id: 'gantt', label: t.timeline, icon: Users },
+    { id: 'reporting', label: t.reporting, icon: ClipboardCheck },
+    { id: 'approval', label: t.approval, icon: CheckCircle2 }
+  ]), [t.approval, t.dashboard, t.projectAnalysis, t.reporting, t.timeline]);
+
+  const statusLabel = status === 'connected' ? t.connected : status === 'error' ? t.disconnected : t.checking;
 
   const checkConnection = async () => {
     try {
@@ -376,6 +492,95 @@ const App = () => {
     });
   };
 
+  const totalHoursValue = useMemo(() =>
+    filteredData.reduce((sum, entry) => sum + entry.hours, 0),
+    [filteredData]
+  );
+
+  const avgProjectHoursValue = useMemo(() => (
+    totalHoursValue / (dashAvailableProjects.length || 1)
+  ), [dashAvailableProjects.length, totalHoursValue]);
+
+  const dataPointsValue = filteredData.length;
+
+  const activeFilterCount = useMemo(() => (
+    [dashYear, dashMonth, dashWeek].filter(Boolean).length +
+    (dashSelectedDepts.size > 0 ? 1 : 0) +
+    (dashSelectedProjects.size > 0 ? 1 : 0)
+  ), [dashMonth, dashSelectedDepts.size, dashSelectedProjects.size, dashWeek, dashYear]);
+
+  const overviewTimeframeLabel = useMemo(() => {
+    if (dashYear && dashMonth && dashWeek) return `${dashYear}-${dashMonth} / W${dashWeek}`;
+    if (dashYear && dashMonth) return `${dashYear}-${dashMonth}`;
+    if (dashYear) return dashYear;
+    return uiText.allPeriods;
+  }, [dashMonth, dashWeek, dashYear, uiText.allPeriods]);
+
+  const topDepartment = useMemo(() => {
+    const grouped = dataHelper.groupByField(filteredData, 'department').sort((a, b) => b.value - a.value);
+    return grouped[0]?.name || '—';
+  }, [filteredData]);
+
+  const reportingDeptCount = Object.keys(reportingByDept).length;
+  const approvalPendingCount = useMemo(() => approvalRecords.reduce((sum, row) => sum + row.count, 0), [approvalRecords]);
+  const approvalPendingHours = useMemo(() => approvalRecords.reduce((sum, row) => sum + row.total_hours, 0), [approvalRecords]);
+
+  const pageHighlights = useMemo(() => {
+    if (activeTab === 'overview' || activeTab === 'project_analysis') {
+      return [
+        { label: uiText.periodRange, value: overviewTimeframeLabel },
+        { label: uiText.visibleDepts, value: dashAvailableDepts.length },
+        { label: uiText.visibleProjects, value: dashAvailableProjects.length }
+      ];
+    }
+
+    if (activeTab === 'gantt') {
+      return [
+        { label: uiText.periodRange, value: overviewTimeframeLabel },
+        { label: uiText.visibleProjects, value: dashAvailableProjects.length },
+        { label: t.dataPoints, value: dataPointsValue }
+      ];
+    }
+
+    if (activeTab === 'reporting') {
+      return [
+        { label: t.targetHours, value: `${targetHours}h` },
+        { label: uiText.deptGroups, value: reportingDeptCount },
+        { label: uiText.periodRange, value: filterWeek || filterMonth || filterYear || uiText.allPeriods }
+      ];
+    }
+
+    return [
+      { label: t.pendingCount, value: approvalPendingCount },
+      { label: t.pendingHours, value: `${approvalPendingHours.toFixed(1)}h` },
+      { label: uiText.periodRange, value: approvalMonth || approvalYear || uiText.allPeriods }
+    ];
+  }, [
+    activeTab,
+    approvalMonth,
+    approvalPendingCount,
+    approvalPendingHours,
+    approvalYear,
+    dashAvailableDepts.length,
+    dashAvailableProjects.length,
+    dataPointsValue,
+    filterMonth,
+    filterWeek,
+    filterYear,
+    overviewTimeframeLabel,
+    reportingDeptCount,
+    t.dataPoints,
+    t.pendingCount,
+    t.pendingHours,
+    t.targetHours,
+    targetHours,
+    uiText.allPeriods,
+    uiText.deptGroups,
+    uiText.periodRange,
+    uiText.visibleDepts,
+    uiText.visibleProjects
+  ]);
+
   const trendChartOpt = useMemo(() => {
     // Determine aggregation dynamically based on what's selected
     let aggType = 'monthly';
@@ -390,18 +595,31 @@ const App = () => {
     // The instruction provided `const projNames = Object.keys(agg); const periods = Array.from(new Set(projNames.flatMap(p => Object.keys(agg[p])))).sort();`
     // which suggests a different `agg` structure. Assuming the original `agg` structure is correct for ECharts.
     return {
-      tooltip: { 
-        trigger: 'item', 
-        formatter: (params) => `${params.seriesName}<br/>${params.name}: ${params.value} h`,
-        backgroundColor: 'rgba(15, 23, 42, 0.9)', 
-        borderColor: '#6366f1', 
-        textStyle: { color: '#fff' } 
+      color: EDITORIAL_THEME.palette,
+      tooltip: {
+        ...tooltipBase,
+        trigger: 'item',
+        formatter: (params) => `${params.seriesName}<br/>${params.name}: ${params.value} h`
       },
-      legend: { data: agg.projects, textStyle: { color: '#94a3b8' }, top: 0, type: 'scroll' },
+      legend: { data: agg.projects, textStyle: chartText, top: 0, type: 'scroll' },
       grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
-      xAxis: { type: 'category', data: agg.labels, axisLabel: { color: '#94a3b8' } },
-      yAxis: { type: 'value', axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
-      series: agg.series
+      xAxis: { type: 'category', data: agg.labels, axisLabel: chartAxis },
+      yAxis: { type: 'value', axisLabel: chartAxis, splitLine: chartSplitLine },
+      series: agg.series.map((series, index) => ({
+        ...series,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 7,
+        lineStyle: {
+          ...(series.lineStyle || {}),
+          width: 3,
+          color: EDITORIAL_THEME.palette[index % EDITORIAL_THEME.palette.length]
+        },
+        itemStyle: {
+          ...(series.itemStyle || {}),
+          color: EDITORIAL_THEME.palette[index % EDITORIAL_THEME.palette.length]
+        }
+      }))
     };
   }, [filteredData, dashYear, dashMonth, dashWeek]);
 
@@ -425,12 +643,11 @@ const App = () => {
     });
     
     return {
+      color: [EDITORIAL_THEME.accent, EDITORIAL_THEME.brass],
       tooltip: { 
+        ...tooltipBase,
         trigger: 'axis', 
         axisPointer: { type: 'shadow' },
-        backgroundColor: 'rgba(15, 23, 42, 0.9)', 
-        borderColor: '#6366f1', 
-        textStyle: { color: '#fff' },
         formatter: (params) => {
           let res = `${params[0].name}<br/>`;
           params.forEach(p => {
@@ -439,13 +656,13 @@ const App = () => {
           return res;
         }
       },
-      legend: { data: [t.totalHours, t.avgMonthlyHours], textStyle: { color: '#94a3b8' }, top: 0 },
+      legend: { data: [t.totalHours, t.avgMonthlyHours], textStyle: chartText, top: 0 },
       grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
       xAxis: { 
         type: 'category', 
         data: sorted.map(i => i.name),
         axisLabel: { 
-          color: '#94a3b8', 
+          ...chartAxis,
           rotate: sorted.length > 5 ? 30 : 0,
           interval: 0
         }
@@ -454,13 +671,13 @@ const App = () => {
         { 
           type: 'value', 
           name: t.totalHours,
-          axisLabel: { color: '#94a3b8' },
-          splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } 
+          axisLabel: chartAxis,
+          splitLine: chartSplitLine
         },
         {
           type: 'value',
           name: t.avgMonthlyHours,
-          axisLabel: { color: '#22d3ee' },
+          axisLabel: { ...chartAxis, color: EDITORIAL_THEME.brass },
           splitLine: { show: false }
         }
       ],
@@ -470,12 +687,8 @@ const App = () => {
           type: 'bar',
           data: sorted.map(i => i.value),
           itemStyle: {
-            borderRadius: [5, 5, 0, 0],
-            color: {
-              type: 'linear',
-              x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [{ offset: 0, color: '#6366f1' }, { offset: 1, color: '#a855f7' }]
-            }
+            borderRadius: [6, 6, 0, 0],
+            color: EDITORIAL_THEME.accent
           },
           emphasis: { focus: 'series' }
         },
@@ -485,8 +698,8 @@ const App = () => {
           yAxisIndex: 1,
           smooth: true,
           data: avgData,
-          itemStyle: { color: '#22d3ee' },
-          lineStyle: { width: 3, shadowBlur: 10, shadowColor: 'rgba(34, 211, 238, 0.5)' },
+          itemStyle: { color: EDITORIAL_THEME.brass },
+          lineStyle: { width: 3, color: EDITORIAL_THEME.brass },
           emphasis: { focus: 'series' }
         }
       ]
@@ -509,15 +722,15 @@ const App = () => {
       return {
         name: cat,
         value: [index, projData[cat].start, projData[cat].end],
-        itemStyle: { normal: { color: '#6366f1' } }
+        itemStyle: { normal: { color: EDITORIAL_THEME.accent } }
       };
     });
 
     return {
-      tooltip: { formatter: (params) => `${params.name}: ${params.value[1]} ~ ${params.value[2]}` },
-      grid: { left: '150px' },
-      xAxis: { type: 'time', axisLabel: { color: '#94a3b8' } },
-      yAxis: { data: categories, axisLabel: { color: '#94a3b8' } },
+      tooltip: { ...tooltipBase, formatter: (params) => `${params.name}: ${params.value[1]} ~ ${params.value[2]}` },
+      grid: { left: '150px', right: '4%', top: '6%', bottom: '6%' },
+      xAxis: { type: 'time', axisLabel: chartAxis, splitLine: chartSplitLine },
+      yAxis: { data: categories, axisLabel: chartAxis },
       series: [{
         type: 'custom',
         renderItem: (params, api) => {
@@ -547,13 +760,8 @@ const App = () => {
     
     return {
       tooltip: {
+        ...tooltipBase,
         trigger: 'axis',
-        backgroundColor: '#ffffff',
-        borderColor: '#e5e7eb',
-        borderWidth: 1,
-        textStyle: { color: '#111827', fontWeight: 600 },
-        padding: [10, 15],
-        extraCssText: 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-radius: 12px;',
         formatter: (params) => {
           let res = `<div style="margin-bottom: 5px; font-weight: 800;">${params[0].name}</div>`;
           let total = 0;
@@ -566,89 +774,152 @@ const App = () => {
                       <span style="font-weight:700;">${val} h (${percent}%)</span>
                     </div>`;
           });
-          res += `<div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #f1f5f9; font-weight: 800; display:flex; justify-content:space-between;">
+          res += `<div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid ${EDITORIAL_THEME.mist}; font-weight: 800; display:flex; justify-content:space-between;">
                     <span>Total</span>
                     <span>${total.toFixed(1)} h</span>
                   </div>`;
           return res;
         }
       },
-      legend: { textStyle: { color: '#6b7280', fontWeight: 600 }, type: 'scroll', bottom: 10 },
+      color: EDITORIAL_THEME.palette,
+      legend: { textStyle: chartText, type: 'scroll', bottom: 10 },
       grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
-      xAxis: { type: 'category', data: analysisRes.labels, axisLabel: { color: '#9ca3af', fontWeight: 600 } },
-      yAxis: { type: 'value', name: t.totalHours, axisLabel: { color: '#9ca3af', fontWeight: 600 }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
-      series: analysisRes.series.map(s => ({
+      xAxis: { type: 'category', data: analysisRes.labels, axisLabel: chartAxis },
+      yAxis: { type: 'value', name: t.totalHours, axisLabel: chartAxis, splitLine: chartSplitLine },
+      series: analysisRes.series.map((s, index) => ({
         ...s,
-        itemStyle: { borderRadius: [4, 4, 0, 0] }
+        itemStyle: {
+          borderRadius: [4, 4, 0, 0],
+          color: EDITORIAL_THEME.palette[index % EDITORIAL_THEME.palette.length]
+        }
       }))
     };
   }, [filteredData, dashYear, dashMonth, dashWeek, t.totalHours]);
 
   return (
-    <div className="app-container">
-      <aside className="sidebar">
-        <div className="logo">
-          <div className="logo-icon">
-            <Calendar size={20} color="#000" />
-          </div>
-          <span>AnxShowtime</span>
-        </div>
+    <div className={`app-shell ${isEmbed ? 'is-embed' : ''}`}>
+      <div className="app-glow app-glow-one" aria-hidden="true" />
+      <div className="app-glow app-glow-two" aria-hidden="true" />
 
-        <nav className="nav-section">
-          <div className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}><LayoutDashboard size={20} /> <span>{t.dashboard}</span></div>
-          <div className={`nav-item ${activeTab === 'project_analysis' ? 'active' : ''}`} onClick={() => setActiveTab('project_analysis')}><BarChart3 size={20} /> <span>{t.projectAnalysis}</span></div>
-          <div className={`nav-item ${activeTab === 'gantt' ? 'active' : ''}`} onClick={() => setActiveTab('gantt')}><Users size={20} /> <span>{t.timeline}</span></div>
-          <div className={`nav-item ${activeTab === 'reporting' ? 'active' : ''}`} onClick={() => setActiveTab('reporting')}><ClipboardCheck size={20} /> <span>{t.reporting}</span></div>
-          <div className={`nav-item ${activeTab === 'approval' ? 'active' : ''}`} onClick={() => setActiveTab('approval')}><CheckCircle2 size={20} /> <span>{t.approval}</span></div>
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="connection-status">
-            <div className={`status-dot ${status}`}></div>
-            <div className="status-text">
-              <span>{t.backend}: {status === 'connected' ? t.connected : status === 'error' ? t.disconnected : t.checking}</span>
+      <header className="topbar-surface">
+        <div className="topbar-main">
+          <div className="brand-lockup">
+            <div className="logo">
+              <div className="logo-icon">
+                <Calendar size={18} />
+              </div>
+              <div className="logo-copy">
+                <span>AnxShowtime</span>
+                <small>{uiText.workspace}</small>
+              </div>
             </div>
           </div>
 
-          <label className="upload-btn">
-            <Upload size={20} />
-            <span>{t.upload}</span>
-            <input type="file" hidden onChange={handleFileUpload} />
-          </label>
-          
-          <div className="lang-toggle">
-            <button className={lang === 'zh' ? 'active' : ''} onClick={() => setLang('zh')}>CN</button>
-            <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
+          <div className="topbar-utilities">
+            <div className={`utility-status ${status}`}>
+              <div className="status-dot"></div>
+              <div className="utility-status-copy">
+                <span>{t.backend}</span>
+                <strong>{statusLabel}</strong>
+              </div>
+            </div>
+
+            <label className="utility-upload">
+              <Upload size={18} />
+              <span>{t.upload}</span>
+              <input type="file" hidden onChange={handleFileUpload} />
+            </label>
+
+            <div className="lang-toggle utility-lang-toggle">
+              <button className={lang === 'zh' ? 'active' : ''} onClick={() => setLang('zh')}>CN</button>
+              <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
+            </div>
           </div>
         </div>
-      </aside>
+
+        <div className="topbar-nav-shell">
+          <nav className="topbar-nav" aria-label="Primary Navigation">
+            {navItems.map((item) => {
+              const NavIcon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`top-nav-item ${activeTab === item.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(item.id)}
+                >
+                  <NavIcon size={16} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      </header>
 
       <main className="main-content">
-        <header className="header">
-          <div>
-            <h1>
-              {activeTab === 'overview' ? t.title :
-               activeTab === 'reporting' ? t.reportingTitle : 
-               activeTab === 'approval' ? t.approvalTitle : 
-               activeTab === 'project_analysis' ? t.deptContribution : 
-               t.title}
-            </h1>
+        <header className={`page-hero ${activeTab === 'overview' ? 'page-hero-overview' : ''}`}>
+          <div className="page-intro-copy">
+            <p className="page-eyebrow">{pageMeta.eyebrow}</p>
+            <h1 className="page-title">{pageMeta.title}</h1>
+            <p className="page-summary">{pageMeta.description}</p>
+
+            {activeTab === 'overview' && (
+              <div className="hero-meta-row">
+                <span className="hero-meta-pill">
+                  <span>{uiText.liveSync}</span>
+                  <strong>{statusLabel}</strong>
+                </span>
+                <span className="hero-meta-pill">
+                  <span>{uiText.activeFilters}</span>
+                  <strong>{activeFilterCount}</strong>
+                </span>
+                <span className="hero-meta-pill">
+                  <span>{uiText.topDept}</span>
+                  <strong>{topDepartment}</strong>
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="page-hero-panel">
+            <div className="hero-panel-header">
+              <span>{uiText.currentView}</span>
+              <strong>{pageMeta.eyebrow}</strong>
+            </div>
+            <div className="hero-panel-grid">
+              {pageHighlights.map((item) => (
+                <div key={item.label} className="hero-panel-stat">
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
           </div>
         </header>
 
-        {(activeTab === 'reporting' || activeTab === 'approval') && (
-          <div className="filters-bar" style={{ display: 'none' }} />
-        )}
         {activeTab === 'overview' && (
-          <div className="stats-grid">
-            <div className="card"><h3>{t.totalHours}</h3><p className="stat-value primary">{filteredData.reduce((a, b) => a + b.hours, 0).toFixed(1)} h</p></div>
-            <div className="card"><h3>{t.avgProject}</h3><p className="stat-value accent">{(filteredData.reduce((a, b) => a + b.hours, 0) / (dashAvailableProjects.length || 1)).toFixed(1)} h</p></div>
-            <div className="card"><h3>{t.dataPoints}</h3><p className="stat-value success">{filteredData.length}</p></div>
-          </div>
+          <section className="stats-grid hero-stats-grid">
+            <div className="card stat-card stat-card-primary">
+              <h3>{t.totalHours}</h3>
+              <p className="stat-value primary">{totalHoursValue.toFixed(1)} h</p>
+              <span className="stat-footnote">{uiText.periodRange}: {overviewTimeframeLabel}</span>
+            </div>
+            <div className="card stat-card stat-card-accent">
+              <h3>{t.avgProject}</h3>
+              <p className="stat-value accent">{avgProjectHoursValue.toFixed(1)} h</p>
+              <span className="stat-footnote">{uiText.visibleProjects}: {dashAvailableProjects.length}</span>
+            </div>
+            <div className="card stat-card stat-card-soft">
+              <h3>{t.dataPoints}</h3>
+              <p className="stat-value success">{dataPointsValue}</p>
+              <span className="stat-footnote">{uiText.visibleDepts}: {dashAvailableDepts.length}</span>
+            </div>
+          </section>
         )}
 
         {(activeTab === 'overview' || activeTab === 'project_analysis') && (
-          <div className="reporting-tab">
+          <div className="reporting-tab section-shell">
             <div className="reporting-top-bar">
               <div className="reporting-filters">
                 <div className="filter-group">
@@ -711,7 +982,7 @@ const App = () => {
                               <span className="chip-label">{dept}</span>
                             </label>
                           ))}
-                          {dashAvailableDepts.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无部门数据</span>}
+                          {dashAvailableDepts.length === 0 && <span className="text-muted empty-state-text">暂无部门数据</span>}
                         </div>
                       </div>
                     </>
@@ -746,7 +1017,7 @@ const App = () => {
                               <span className="chip-label">{proj}</span>
                             </label>
                           ))}
-                          {dashAvailableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
+                          {dashAvailableProjects.length === 0 && <span className="text-muted empty-state-text">暂无项目数据</span>}
                         </div>
                       </div>
                     </>
@@ -758,30 +1029,84 @@ const App = () => {
         )}
 
         {activeTab === 'project_analysis' && (
-          <div className="card" style={{ marginTop: '2.5rem' }}>
+          <div className="card chart-card section-card elevated-module">
             <h3>{t.deptContribution}</h3>
             <ReactECharts option={projectAnalysisOpt} style={{ height: '500px' }} notMerge={true} />
           </div>
         )}
 
         {activeTab === 'overview' && (
-          <>
-            <div className="stats-grid main-charts">
-              <div className="card"><h3>{t.trendTitle}</h3><ReactECharts option={trendChartOpt} style={{ height: '350px' }} notMerge={true} /></div>
+          <div className="section-shell overview-grid">
+            <div className="card chart-card chart-card-primary elevated-module">
+              <div className="card-heading-row">
+                <div>
+                  <h3>{t.trendTitle}</h3>
+                  <p className="module-caption">{pageMeta.description}</p>
+                </div>
+                <div className="module-kicker">{overviewTimeframeLabel}</div>
+              </div>
+              <ReactECharts option={trendChartOpt} style={{ height: '390px' }} notMerge={true} />
             </div>
-            <div className="card" style={{ marginTop: '2.5rem' }}>
-              <h3>{t.rankingTitle}</h3>
-              <ReactECharts option={rankingChartOpt} style={{ height: '400px' }} notMerge={true} />
+
+            <div className="overview-secondary-grid">
+              <div className="card chart-card section-card elevated-module">
+                <div className="card-heading-row">
+                  <div>
+                    <h3>{t.rankingTitle}</h3>
+                    <p className="module-caption">{uiText.topDept}: {topDepartment}</p>
+                  </div>
+                  <div className="module-kicker">{t.stats}</div>
+                </div>
+                <ReactECharts option={rankingChartOpt} style={{ height: '400px' }} notMerge={true} />
+              </div>
+
+              <div className="card overview-insight-card elevated-module">
+                <div className="card-heading-row">
+                  <div>
+                    <h3>{t.stats}</h3>
+                    <p className="module-caption">{uiText.workspace}</p>
+                  </div>
+                  <div className="module-kicker">{t.dashboard}</div>
+                </div>
+
+                <div className="insight-grid">
+                  <div className="insight-item">
+                    <span>{uiText.topDept}</span>
+                    <strong>{topDepartment}</strong>
+                  </div>
+                  <div className="insight-item">
+                    <span>{uiText.activeFilters}</span>
+                    <strong>{activeFilterCount}</strong>
+                  </div>
+                  <div className="insight-item">
+                    <span>{uiText.visibleProjects}</span>
+                    <strong>{dashAvailableProjects.length}</strong>
+                  </div>
+                  <div className="insight-item">
+                    <span>{t.backend}</span>
+                    <strong>{statusLabel}</strong>
+                  </div>
+                </div>
+              </div>
             </div>
-          </>
+          </div>
         )}
 
         {activeTab === 'gantt' && (
-          <div className="card"><h3>{t.ganttTitle}</h3><ReactECharts option={ganttOpt} style={{ height: '500px' }} /></div>
+          <div className="card chart-card elevated-module">
+            <div className="card-heading-row">
+              <div>
+                <h3>{t.ganttTitle}</h3>
+                <p className="module-caption">{pageMeta.description}</p>
+              </div>
+              <div className="module-kicker">{overviewTimeframeLabel}</div>
+            </div>
+            <ReactECharts option={ganttOpt} style={{ height: '500px' }} />
+          </div>
         )}
 
         {activeTab === 'reporting' && (
-          <div className="reporting-tab">
+          <div className="reporting-tab section-shell">
             <div className="reporting-top-bar">
               <div className="reporting-filters">
                 <div className="filter-group">
@@ -834,7 +1159,7 @@ const App = () => {
             </div>
 
             {Object.keys(reportingByDept).length === 0 ? (
-              <div className="card no-issues">{t.noIssues}</div>
+              <div className="card no-issues table-card">{t.noIssues}</div>
             ) : (
               Object.entries(reportingByDept).map(([dept, info]) => (
                 <div key={dept} className="dept-accordion">
@@ -884,8 +1209,7 @@ const App = () => {
         )}
 
         {activeTab === 'approval' && (
-          <div className="reporting-tab">
-            {/* Top control bar: period + actions */}
+          <div className="reporting-tab section-shell">
             <div className="reporting-top-bar">
               <div className="reporting-filters">
                 <div className="filter-group">
@@ -940,7 +1264,7 @@ const App = () => {
                               <span className="chip-label">{proj}</span>
                             </label>
                           ))}
-                          {availableProjects.length === 0 && <span className="text-muted" style={{ fontSize: '0.8rem' }}>暂无项目数据</span>}
+                          {availableProjects.length === 0 && <span className="text-muted empty-state-text">暂无项目数据</span>}
                         </div>
                       </div>
                     </>
@@ -968,9 +1292,9 @@ const App = () => {
 
 
             {approvalRecords.length === 0 ? (
-              <div className="card no-issues">{t.noApprovalIssues}</div>
+              <div className="card no-issues table-card">{t.noApprovalIssues}</div>
             ) : (
-              <div className="dept-accordion">
+              <div className="dept-accordion table-card">
                 <div className="emp-table-wrap">
                   <table className="emp-table">
                     <thead>
@@ -986,8 +1310,8 @@ const App = () => {
                         <tr key={i}>
                           <td>{r.department}</td>
                           <td>{r.pending_approver}</td>
-                          <td style={{ color: '#f59e0b', fontWeight: 700 }}>{r.count}</td>
-                          <td style={{ color: '#ef4444', fontWeight: 700 }}>{r.total_hours}h</td>
+                          <td className="cell-accent">{r.count}</td>
+                          <td className="cell-danger">{r.total_hours}h</td>
                         </tr>
                       ))}
                     </tbody>
