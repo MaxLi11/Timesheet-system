@@ -27,6 +27,29 @@ DEFAULT_DEPT_MAPPING = {
 _DEPT_MAPPING_CACHE = DEFAULT_DEPT_MAPPING.copy()
 _LAST_MAPPING_MTIME = 0
 
+PROJECT_SCHEDULE_SHEET = "Schedule"
+PROJECT_SCHEDULE_HEADER_ROW = 2
+PROJECT_SCHEDULE_ROW_TYPE_COLUMN = "Unnamed: 4"
+PROJECT_SCHEDULE_CYCLE_COLUMN = "Unnamed: 30"
+PROJECT_SCHEDULE_MILESTONES = [
+    "Pre-Gate0",
+    "Gate0（kick off)",
+    "Gate1(Initial PRD)",
+    "Design Review 1",
+    "Final PRD",
+    "RTL freeze",
+    "Tape out 1",
+    "Fab out 1",
+    "BS/1st silicon",
+    "Tape out 2",
+    "Fab out2",
+    "ES/2nd silicon",
+    "ATE for MP ready",
+    "Validation done",
+    "CS",
+    "RTP",
+]
+
 def load_dept_mapping():
     """
     Loads department name mapping from 部门简称.xlsx with caching.
@@ -163,6 +186,105 @@ def parse_timesheet(file_path: str):
         return data_rows
     except Exception as e:
         raise Exception(f"解析Excel失败: {str(e)}")
+
+def _normalize_excel_date(value):
+    if pd.isna(value) or value in ("", None):
+        return None
+    if isinstance(value, pd.Timestamp):
+        return value.date()
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        parsed = pd.to_datetime(value, errors='coerce')
+        if pd.isna(parsed):
+            return None
+        return parsed.date()
+    return None
+
+
+def _normalize_number(value):
+    if pd.isna(value) or value in ("", None):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if numeric.is_integer():
+        return int(numeric)
+    return numeric
+
+
+def parse_project_schedule(file_path: str):
+    try:
+        df = pd.read_excel(
+            file_path,
+            sheet_name=PROJECT_SCHEDULE_SHEET,
+            header=PROJECT_SCHEDULE_HEADER_ROW,
+        )
+    except ValueError as exc:
+        raise Exception(f"Project schedule sheet '{PROJECT_SCHEDULE_SHEET}' not found.") from exc
+
+    required_columns = [
+        "BU",
+        "Project Name",
+        "Status",
+        PROJECT_SCHEDULE_ROW_TYPE_COLUMN,
+        PROJECT_SCHEDULE_CYCLE_COLUMN,
+        *PROJECT_SCHEDULE_MILESTONES,
+    ]
+    missing_columns = [column for column in required_columns if column not in df.columns]
+    if missing_columns:
+        raise Exception(
+            f"Project schedule Excel is missing required columns: {', '.join(missing_columns)}"
+        )
+
+    parsed_projects = []
+    row_index = 0
+    while row_index + 2 < len(df):
+        plan_row = df.iloc[row_index]
+        row_type = str(plan_row.get(PROJECT_SCHEDULE_ROW_TYPE_COLUMN) or "").strip()
+        if row_type != "MRD plan":
+            row_index += 1
+            continue
+
+        actual_row = df.iloc[row_index + 1]
+        delta_row = df.iloc[row_index + 2]
+        project_name = str(plan_row.get("Project Name") or "").strip()
+        if not project_name:
+            row_index += 3
+            continue
+
+        project = {
+            "project_name": project_name,
+            "bu": str(plan_row.get("BU") or "").strip(),
+            "status": str(plan_row.get("Status") or "").strip(),
+            "order": len(parsed_projects),
+            "planned_days": _normalize_number(plan_row.get(PROJECT_SCHEDULE_CYCLE_COLUMN)),
+            "actual_days": _normalize_number(actual_row.get(PROJECT_SCHEDULE_CYCLE_COLUMN)),
+            "delta_days": _normalize_number(delta_row.get(PROJECT_SCHEDULE_CYCLE_COLUMN)),
+            "milestones": [],
+        }
+
+        for milestone_order, milestone_name in enumerate(PROJECT_SCHEDULE_MILESTONES):
+            actual_date = _normalize_excel_date(actual_row.get(milestone_name))
+            project["milestones"].append(
+                {
+                    "name": milestone_name,
+                    "order": milestone_order,
+                    "planned_date": _normalize_excel_date(plan_row.get(milestone_name)),
+                    "actual_date": actual_date,
+                    "delta_days": _normalize_number(delta_row.get(milestone_name)),
+                    "is_pending": actual_date is None,
+                }
+            )
+
+        parsed_projects.append(project)
+        row_index += 3
+
+    return parsed_projects
+
 
 if __name__ == "__main__":
     import os

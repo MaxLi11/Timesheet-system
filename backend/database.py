@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, Date, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker
 import os
 
 # Get database URL from environment variable, default to local SQLite
@@ -49,6 +49,40 @@ class TimeEntry(Base):
     approval_status = Column(String)
     current_node = Column(String)    # T col: 当前节点 (e.g. 'Get Approval', 'PL Review', 'Close')
     pending_approver = Column(String) # U col: 未操作者
+
+class ProjectSchedule(Base):
+    __tablename__ = "project_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_name = Column(String, index=True, nullable=False)
+    bu = Column(String)
+    status = Column(String)
+    project_order = Column(Integer, nullable=False, default=0)
+    planned_days = Column(Float)
+    actual_days = Column(Float)
+    delta_days = Column(Float)
+
+    milestones = relationship(
+        "ProjectScheduleMilestone",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="ProjectScheduleMilestone.milestone_order",
+    )
+
+
+class ProjectScheduleMilestone(Base):
+    __tablename__ = "project_schedule_milestones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    schedule_id = Column(Integer, ForeignKey("project_schedules.id"), nullable=False, index=True)
+    milestone_name = Column(String, nullable=False)
+    milestone_order = Column(Integer, nullable=False, default=0)
+    planned_date = Column(Date)
+    actual_date = Column(Date)
+    delta_days = Column(Float)
+
+    project = relationship("ProjectSchedule", back_populates="milestones")
+
 
 def init_db():
     Base.metadata.create_all(bind=engine)

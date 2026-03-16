@@ -54,6 +54,277 @@ const chartText = { color: EDITORIAL_THEME.slateSoft, fontWeight: 600 };
 const chartAxis = { color: EDITORIAL_THEME.slateSoft, fontWeight: 500 };
 const chartSplitLine = { lineStyle: { color: EDITORIAL_THEME.splitLine } };
 
+const SCHEDULE_SERIES_COLORS = {
+  planned: '#7aa6ff',
+  actual: '#4d72ff',
+  pending: '#ff8b4b'
+};
+
+const formatScheduleNumber = (value) => {
+  if (value === null || value === undefined || value === '') return '--';
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return value;
+  return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1);
+};
+
+const buildScheduleDeltaLabel = (value, lang) => {
+  if (value === null || value === undefined || value === '') return '';
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return '';
+  const prefix = numeric > 0 ? '+' : '';
+  return lang === 'zh' ? `${prefix}${numeric}天` : `${prefix}${numeric}d`;
+};
+
+const buildIntervalLabel = (interval) => `${interval.from_milestone} -> ${interval.to_milestone}`;
+
+const buildProjectScheduleChartOption = (project, lang, t) => {
+  const milestones = project?.milestones || [];
+  const intervals = project?.intervals || [];
+  const allDates = milestones
+    .flatMap(milestone => [milestone.planned_date, milestone.actual_date])
+    .filter(Boolean)
+    .map(value => dayjs(value));
+  const minDate = (allDates.length ? dayjs(Math.min(...allDates.map(item => item.valueOf()))) : dayjs()).subtract(10, 'day');
+  const maxDate = (allDates.length ? dayjs(Math.max(...allDates.map(item => item.valueOf()))) : dayjs()).add(10, 'day');
+  const hasIntervalHours = intervals.some(interval => (interval.total_hours || 0) > 0);
+  const intervalLabels = intervals.map(buildIntervalLabel);
+  const departments = Array.from(
+    new Set(
+      intervals.flatMap(interval =>
+        (interval.department_shares || []).map(share => share.department).filter(Boolean)
+      )
+    )
+  );
+
+  const plannedSeries = milestones
+    .filter(milestone => milestone.planned_date)
+    .map(milestone => ({
+      value: [milestone.planned_date, milestone.name],
+      milestone
+    }));
+  const actualSeries = milestones
+    .filter(milestone => milestone.actual_date)
+    .map(milestone => ({
+      value: [milestone.actual_date, milestone.name],
+      milestone,
+      deltaLabel: buildScheduleDeltaLabel(milestone.delta_days, lang)
+    }));
+  const pendingSeries = milestones
+    .filter(milestone => !milestone.actual_date)
+    .map(milestone => ({
+      value: [milestone.planned_date || maxDate.format('YYYY-MM-DD'), milestone.name],
+      milestone
+    }));
+
+  const series = [
+    {
+      name: lang === 'zh' ? '计划时间' : 'Planned',
+      type: 'scatter',
+      xAxisIndex: 0,
+      yAxisIndex: 0,
+      symbolSize: 12,
+      data: plannedSeries,
+      itemStyle: {
+        color: SCHEDULE_SERIES_COLORS.planned,
+        borderColor: '#ffffff',
+        borderWidth: 2
+      },
+      z: 3
+    },
+    {
+      name: lang === 'zh' ? '实际时间' : 'Actual',
+      type: 'scatter',
+      xAxisIndex: 0,
+      yAxisIndex: 0,
+      symbolSize: 14,
+      data: actualSeries,
+      itemStyle: {
+        color: SCHEDULE_SERIES_COLORS.actual,
+        shadowBlur: 16,
+        shadowColor: 'rgba(77, 114, 255, 0.26)'
+      },
+      label: {
+        show: true,
+        position: 'right',
+        color: EDITORIAL_THEME.graphite,
+        fontSize: 11,
+        fontWeight: 700,
+        formatter: ({ data }) => data.deltaLabel || ''
+      },
+      z: 4
+    },
+    {
+      name: lang === 'zh' ? '未到达' : 'Pending',
+      type: 'scatter',
+      xAxisIndex: 0,
+      yAxisIndex: 0,
+      symbol: 'diamond',
+      symbolSize: 12,
+      data: pendingSeries,
+      itemStyle: {
+        color: EDITORIAL_THEME.cloud,
+        borderColor: SCHEDULE_SERIES_COLORS.pending,
+        borderWidth: 2
+      },
+      label: {
+        show: true,
+        position: 'right',
+        color: SCHEDULE_SERIES_COLORS.pending,
+        fontSize: 11,
+        fontWeight: 700,
+        formatter: () => (lang === 'zh' ? '未到达' : 'Pending')
+      },
+      z: 3
+    }
+  ];
+
+  departments.forEach((department, index) => {
+    series.push({
+      name: department,
+      type: 'bar',
+      stack: 'interval-share',
+      xAxisIndex: 1,
+      yAxisIndex: 1,
+      barMaxWidth: 34,
+      itemStyle: {
+        color: EDITORIAL_THEME.palette[index % EDITORIAL_THEME.palette.length],
+        borderRadius: [8, 8, 0, 0]
+      },
+      emphasis: { focus: 'series' },
+      data: intervals.map(interval => {
+        const share = (interval.department_shares || []).find(item => item.department === department);
+        return share ? Number((share.share * 100).toFixed(2)) : 0;
+      })
+    });
+  });
+
+  return {
+    color: EDITORIAL_THEME.palette,
+    animationDuration: 450,
+    legend: {
+      type: 'scroll',
+      bottom: 6,
+      textStyle: chartText
+    },
+    tooltip: {
+      ...tooltipBase,
+      trigger: 'item',
+      formatter: (params) => {
+        if (params.seriesType === 'scatter') {
+          const milestone = params.data?.milestone;
+          if (!milestone) return '';
+          const plannedDate = milestone.planned_date ? dayjs(milestone.planned_date).format('YYYY-MM-DD') : '--';
+          const actualDate = milestone.actual_date ? dayjs(milestone.actual_date).format('YYYY-MM-DD') : (lang === 'zh' ? '未到达' : 'Pending');
+          const deltaLabel = buildScheduleDeltaLabel(milestone.delta_days, lang) || '--';
+          return `
+            <div style="font-weight:800; margin-bottom:6px;">${milestone.name}</div>
+            <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '计划' : 'Planned'}</span><strong>${plannedDate}</strong></div>
+            <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '实际' : 'Actual'}</span><strong>${actualDate}</strong></div>
+            <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '变化' : 'Delta'}</span><strong>${deltaLabel}</strong></div>
+          `;
+        }
+
+        const interval = intervals[params.dataIndex];
+        if (!interval) return '';
+        const share = interval.department_shares?.find(item => item.department === params.seriesName);
+        return `
+          <div style="font-weight:800; margin-bottom:6px;">${buildIntervalLabel(interval)}</div>
+          <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '部门' : 'Department'}</span><strong>${params.seriesName}</strong></div>
+          <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '工时' : 'Hours'}</span><strong>${formatScheduleNumber(share?.hours ?? 0)}h</strong></div>
+          <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '占比' : 'Share'}</span><strong>${formatScheduleNumber(params.value)}%</strong></div>
+          <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '区间总工时' : 'Interval Total'}</span><strong>${formatScheduleNumber(interval.total_hours)}h</strong></div>
+        `;
+      }
+    },
+    grid: [
+      { left: 124, right: 28, top: 36, height: 250 },
+      { left: 92, right: 28, top: 372, height: 188 }
+    ],
+    xAxis: [
+      {
+        type: 'time',
+        min: minDate.format('YYYY-MM-DD'),
+        max: maxDate.format('YYYY-MM-DD'),
+        axisLabel: {
+          ...chartAxis,
+          formatter: value => dayjs(value).format('MM-DD')
+        },
+        splitLine: chartSplitLine
+      },
+      {
+        type: 'category',
+        data: intervalLabels,
+        axisLabel: {
+          ...chartAxis,
+          interval: 0,
+          fontSize: 11,
+          formatter: value => (value.length > 18 ? `${value.slice(0, 18)}...` : value)
+        },
+        splitLine: { show: false }
+      }
+    ],
+    yAxis: [
+      {
+        type: 'category',
+        data: milestones.map(milestone => milestone.name),
+        inverse: true,
+        axisLabel: {
+          ...chartAxis,
+          fontSize: 11,
+          width: 96,
+          overflow: 'truncate'
+        },
+        axisTick: { show: false },
+        axisLine: { show: false }
+      },
+      {
+        type: 'value',
+        min: 0,
+        max: 100,
+        axisLabel: {
+          ...chartAxis,
+          formatter: value => `${value}%`
+        },
+        splitLine: chartSplitLine
+      }
+    ],
+    series,
+    graphic: [
+      {
+        type: 'text',
+        left: 20,
+        top: 10,
+        style: {
+          text: t.milestoneTimeline,
+          fill: EDITORIAL_THEME.graphite,
+          font: '700 13px "IBM Plex Sans", "Noto Sans SC", sans-serif'
+        }
+      },
+      {
+        type: 'text',
+        left: 20,
+        top: 344,
+        style: {
+          text: t.intervalShare,
+          fill: EDITORIAL_THEME.graphite,
+          font: '700 13px "IBM Plex Sans", "Noto Sans SC", sans-serif'
+        }
+      },
+      ...(!hasIntervalHours ? [{
+        type: 'text',
+        left: 'center',
+        top: 458,
+        style: {
+          text: t.intervalNoHours,
+          fill: EDITORIAL_THEME.slateSoft,
+          font: '600 12px "IBM Plex Sans", "Noto Sans SC", sans-serif',
+          textAlign: 'center'
+        }
+      }] : [])
+    ]
+  };
+};
+
 const App = () => {
   const isEmbed = useMemo(() => new URLSearchParams(window.location.search).get('embed') === 'true', []);
   const [data, setData] = useState([]);
@@ -83,6 +354,10 @@ const App = () => {
   const [approvalMonth, setApprovalMonth] = useState('');
   const [selectedProjects, setSelectedProjects] = useState(new Set()); // multi-select
   const [selectedApprover, setSelectedApprover] = useState(''); // single-select
+  const [projectScheduleData, setProjectScheduleData] = useState({ projects: [] });
+  const [legacyProjectChartOpen, setLegacyProjectChartOpen] = useState(false);
+  const [scheduleSelectedProjects, setScheduleSelectedProjects] = useState(new Set());
+  const [scheduleProjectPickerOpen, setScheduleProjectPickerOpen] = useState(false);
 
   const t = {
     zh: {
@@ -111,7 +386,26 @@ const App = () => {
       allApprovers: '全部人员', selectAll: '全选', clearAll: '清空',
       rankingTitle: '项目工时排名', avgMonthlyHours: '月均工时',
       projectAnalysis: '项目工时分析', deptContribution: '部门工时占比',
-      selectProjects: '选择分析项目（可多选）'
+      selectProjects: '选择分析项目（可多选）',
+      legacyContributionTitle: '原有部门工时占比',
+      legacyContributionSubtitle: '保留旧图作为对照，默认折叠',
+      scheduleMonitorTitle: '项目节点进度监控',
+      scheduleMonitorSubtitle: '展示计划与实际节点，以及区间部门工时占比',
+      uploadProjectSchedule: '上传项目进度 Excel',
+      scheduleUploadSuccess: '项目进度已上传，已处理',
+      allScheduleProjects: '全部项目',
+      mappedProjects: '工时映射',
+      projectStatus: '状态',
+      plannedCycle: '计划周期',
+      actualCycle: '实际周期',
+      deltaCycle: '变化天数',
+      showChart: '展开图表',
+      hideChart: '收起图表',
+      noScheduleData: '暂无项目进度数据，请先上传项目进度 Excel',
+      milestoneTimeline: '节点计划 / 实际时间线',
+      intervalShare: '节点区间部门工时占比',
+      intervalNoHours: '当前可用区间内暂时没有 Close 工时',
+      filterScheduleProjects: '选择项目（可多选）'
     },
     en: {
       dashboard: 'Dashboard', stats: 'Statistics', activity: 'Activity',
@@ -139,7 +433,26 @@ const App = () => {
       allApprovers: 'All Approvers', selectAll: 'All', clearAll: 'Clear',
       rankingTitle: 'Project Hours Ranking', avgMonthlyHours: 'Avg. Monthly Hours',
       projectAnalysis: 'Project Analysis', deptContribution: 'Dept. Contribution',
-      selectProjects: 'Select Projects'
+      selectProjects: 'Select Projects',
+      legacyContributionTitle: 'Legacy Dept. Contribution',
+      legacyContributionSubtitle: 'Keep the original contribution chart available as a collapsed reference.',
+      scheduleMonitorTitle: 'Project Schedule Monitor',
+      scheduleMonitorSubtitle: 'Compare planned and actual milestones with interval department hour share.',
+      uploadProjectSchedule: 'Upload Project Schedule Excel',
+      scheduleUploadSuccess: 'Project schedule uploaded.',
+      allScheduleProjects: 'All Schedule Projects',
+      mappedProjects: 'Mapped Timesheet Projects',
+      projectStatus: 'Status',
+      plannedCycle: 'Planned Cycle',
+      actualCycle: 'Actual Cycle',
+      deltaCycle: 'Delta Days',
+      showChart: 'Show Chart',
+      hideChart: 'Hide Chart',
+      noScheduleData: 'No project schedule data yet. Upload the project schedule Excel first.',
+      milestoneTimeline: 'Milestone Planned / Actual Timeline',
+      intervalShare: 'Department Share by Milestone Interval',
+      intervalNoHours: 'No Close hours are available in the current milestone intervals.',
+      filterScheduleProjects: 'Select Projects (multi-select)'
     }
   }[lang];
 
@@ -179,8 +492,8 @@ const App = () => {
       },
       project_analysis: {
         eyebrow: t.projectAnalysis,
-        title: t.deptContribution,
-        description: t.selectProjects
+        title: t.scheduleMonitorTitle,
+        description: t.scheduleMonitorSubtitle
       },
       reporting: {
         eyebrow: t.reporting,
@@ -205,6 +518,8 @@ const App = () => {
     t.reporting,
     t.reportingSubtitle,
     t.reportingTitle,
+    t.scheduleMonitorSubtitle,
+    t.scheduleMonitorTitle,
     t.selectProjects,
     t.subtitle,
     t.title
@@ -251,6 +566,17 @@ const App = () => {
     }
   }, []);
 
+  const fetchProjectScheduleData = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/project-schedule-analysis`);
+      if (!res.ok) return;
+      const json = await res.json();
+      setProjectScheduleData(json);
+    } catch (err) {
+      console.error('Failed to fetch project schedule data:', err);
+    }
+  }, []);
+
   const fetchData = useCallback(async () => {
     try {
       // setLoading(true); // Temporarily removing loading to clear lint warning, or keep it but use it in UI.
@@ -269,12 +595,13 @@ const App = () => {
     fetchData();
     fetchReportingData();
     fetchApprovalData();
+    fetchProjectScheduleData();
     const interval = setInterval(() => {
         checkConnection();
         // optionally refresh data periodically, but checking connection is enough
     }, 5000);
     return () => clearInterval(interval);
-  }, [fetchData, fetchReportingData, fetchApprovalData]);
+  }, [fetchData, fetchReportingData, fetchApprovalData, fetchProjectScheduleData]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -289,10 +616,49 @@ const App = () => {
       fetchData();
       fetchReportingData();
       fetchApprovalData();
+      fetchProjectScheduleData();
     } catch (err) {
       alert(`${t.uploadFailed}: ${err.message}`);
+    } finally {
+      e.target.value = '';
     }
   };
+
+  const handleProjectScheduleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch(`${API_BASE_URL}/upload-project-schedule`, { method: 'POST', body: formData });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || result.message || 'Upload failed');
+      alert(`${t.scheduleUploadSuccess} ${result.projects_processed} / ${result.milestones_processed}`);
+      fetchProjectScheduleData();
+    } catch (err) {
+      alert(`${t.uploadFailed}: ${err.message}`);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  useEffect(() => {
+    const scheduleProjects = projectScheduleData.projects || [];
+    if (scheduleProjects.length === 0) {
+      setScheduleSelectedProjects(new Set());
+      return;
+    }
+
+    setScheduleSelectedProjects(prev => {
+      if (prev.size === 0) {
+        return new Set([scheduleProjects[0].project_name]);
+      }
+      const validSelections = scheduleProjects
+        .map(project => project.project_name)
+        .filter(projectName => prev.has(projectName));
+      return validSelections.length > 0 ? new Set(validSelections) : new Set([scheduleProjects[0].project_name]);
+    });
+  }, [projectScheduleData]);
 
   // Reporting rate period options (available years / months / weeks from data)
   const periodOptions = useMemo(
@@ -567,6 +933,33 @@ const App = () => {
     uiText.visibleDepts,
     uiText.visibleProjects
   ]);
+
+  const scheduleProjects = projectScheduleData.projects || [];
+
+  const visibleScheduleProjects = useMemo(
+    () => scheduleProjects.filter(project => scheduleSelectedProjects.has(project.project_name)),
+    [scheduleProjects, scheduleSelectedProjects]
+  );
+
+  const scheduleChartOptions = useMemo(() => {
+    const chartMap = new Map();
+    scheduleProjects.forEach(project => {
+      chartMap.set(project.project_name, buildProjectScheduleChartOption(project, lang, t));
+    });
+    return chartMap;
+  }, [lang, scheduleProjects, t]);
+
+  const toggleScheduleProject = (projectName) => {
+    setScheduleSelectedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(projectName)) {
+        next.delete(projectName);
+      } else {
+        next.add(projectName);
+      }
+      return next;
+    });
+  };
 
   const trendChartOpt = useMemo(() => {
     const agg = dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity);
@@ -985,9 +1378,137 @@ const App = () => {
         )}
 
         {activeTab === 'project_analysis' && (
-          <div className="card chart-card section-card elevated-module">
-            <h3>{t.deptContribution}</h3>
-            <ReactECharts option={projectAnalysisOpt} style={{ height: '500px' }} notMerge={true} />
+          <div className="project-schedule-section section-shell">
+            <div className="legacy-project-chart-card card elevated-module">
+              <div className="card-heading-row">
+                <div>
+                  <h3>{t.legacyContributionTitle}</h3>
+                  <p className="module-caption">{t.legacyContributionSubtitle}</p>
+                </div>
+                <button
+                  type="button"
+                  className="legacy-chart-toggle"
+                  onClick={() => setLegacyProjectChartOpen(prev => !prev)}
+                >
+                  {legacyProjectChartOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  <span>{legacyProjectChartOpen ? t.hideChart : t.showChart}</span>
+                </button>
+              </div>
+              {legacyProjectChartOpen && (
+                <ReactECharts option={projectAnalysisOpt} style={{ height: '440px' }} notMerge={true} />
+              )}
+            </div>
+
+            <div className="card project-schedule-shell elevated-module">
+              <div className="card-heading-row">
+                <div>
+                  <h3>{t.scheduleMonitorTitle}</h3>
+                  <p className="module-caption">{t.scheduleMonitorSubtitle}</p>
+                </div>
+                <label className="utility-upload schedule-upload-control">
+                  <Upload size={18} />
+                  <span>{t.uploadProjectSchedule}</span>
+                  <input type="file" hidden onChange={handleProjectScheduleUpload} />
+                </label>
+              </div>
+
+              <div className="project-schedule-toolbar">
+                <div className="filter-group dropdown-container">
+                  <label>{t.filterScheduleProjects}</label>
+                  <button
+                    type="button"
+                    className="dropdown-button"
+                    onClick={() => setScheduleProjectPickerOpen(prev => !prev)}
+                  >
+                    {scheduleSelectedProjects.size === 0
+                      ? t.allScheduleProjects
+                      : (lang === 'zh' ? `已选 ${scheduleSelectedProjects.size} 个` : `${scheduleSelectedProjects.size} selected`)}
+                    <ChevronDown size={16} />
+                  </button>
+                  {scheduleProjectPickerOpen && (
+                    <>
+                      <div className="dropdown-overlay" onClick={() => setScheduleProjectPickerOpen(false)} />
+                      <div className="approval-project-panel">
+                        <div className="project-panel-header">
+                          <span className="filter-group-label">{t.filterScheduleProjects}</span>
+                          <div className="project-panel-btns">
+                            <button type="button" onClick={() => setScheduleSelectedProjects(new Set(scheduleProjects.map(project => project.project_name)))}>
+                              {t.selectAll}
+                            </button>
+                            <button type="button" onClick={() => setScheduleSelectedProjects(new Set())}>
+                              {t.clearAll}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="project-checkboxes">
+                          {scheduleProjects.map(project => (
+                            <label key={project.project_name} className={`project-chip ${scheduleSelectedProjects.has(project.project_name) ? 'selected' : ''}`}>
+                              <input
+                                type="checkbox"
+                                checked={scheduleSelectedProjects.has(project.project_name)}
+                                onChange={() => toggleScheduleProject(project.project_name)}
+                              />
+                              <span className="chip-label">{project.project_name}</span>
+                            </label>
+                          ))}
+                          {scheduleProjects.length === 0 && <span className="text-muted empty-state-text">{t.noScheduleData}</span>}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {scheduleProjects.length === 0 ? (
+                <div className="project-schedule-empty">{t.noScheduleData}</div>
+              ) : visibleScheduleProjects.length === 0 ? (
+                <div className="project-schedule-empty">{t.filterScheduleProjects}</div>
+              ) : (
+                <div className="project-schedule-grid">
+                  {visibleScheduleProjects.map(project => (
+                    <article key={project.project_name} className="project-schedule-card">
+                      <div className="project-schedule-card-header">
+                        <div>
+                          <h3>{project.project_name}</h3>
+                          <p className="module-caption">{project.bu || '--'} / {project.status || '--'}</p>
+                        </div>
+                        <div className="project-meta-pills">
+                          <span className="hero-meta-pill">
+                            <span>{t.projectStatus}</span>
+                            <strong>{project.status || '--'}</strong>
+                          </span>
+                          <span className="hero-meta-pill">
+                            <span>{t.mappedProjects}</span>
+                            <strong>{(project.mapped_timesheet_projects || []).join(', ') || '--'}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="project-cycle-grid">
+                        <div className="hero-panel-stat">
+                          <span>{t.plannedCycle}</span>
+                          <strong>{formatScheduleNumber(project.cycle_summary?.planned_days)}</strong>
+                        </div>
+                        <div className="hero-panel-stat">
+                          <span>{t.actualCycle}</span>
+                          <strong>{formatScheduleNumber(project.cycle_summary?.actual_days)}</strong>
+                        </div>
+                        <div className="hero-panel-stat">
+                          <span>{t.deltaCycle}</span>
+                          <strong>{formatScheduleNumber(project.cycle_summary?.delta_days)}</strong>
+                        </div>
+                      </div>
+
+                      <ReactECharts
+                        option={scheduleChartOptions.get(project.project_name)}
+                        style={{ height: '610px' }}
+                        notMerge={true}
+                      />
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
