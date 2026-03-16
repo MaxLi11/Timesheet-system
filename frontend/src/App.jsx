@@ -4,7 +4,6 @@ import {
   Upload,
   BarChart3,
   Calendar,
-  Users,
   ChevronDown,
   ChevronRight,
   FileDown,
@@ -59,7 +58,7 @@ const App = () => {
   const isEmbed = useMemo(() => new URLSearchParams(window.location.search).get('embed') === 'true', []);
   const [data, setData] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
-  // Global Dashboard & Timeline filters
+  // Global dashboard filters
   const [dashYear, setDashYear] = useState('');
   const [dashMonth, setDashMonth] = useState('');
   const [dashWeek, setDashWeek] = useState('');
@@ -86,14 +85,14 @@ const App = () => {
 
   const t = {
     zh: {
-      dashboard: '仪表盘', stats: '统计分析', timeline: '项目时间轴', activity: '活跃度',
+      dashboard: '仪表盘', stats: '统计分析', activity: '活跃度',
       reporting: '完整填报率', approval: '审批完成率',
       title: '仪表盘', subtitle: '实时的工时统计与分析', sync: '同步数据', filters: '筛选',
       reportingTitle: '完整填报率', reportingSubtitle: '筛选工时填报差异信息',
       approvalTitle: '审批完成率', approvalSubtitle: '统计待审批工时信息',
       period: { weekly: '周统计', monthly: '月统计', quarterly: '季度统计' },
       totalHours: '总工时', avgProject: '项目平均', dataPoints: '数据点',
-      trendTitle: '工时走势', distTitle: '项目分布', heatmapTitle: '活跃热力图', ganttTitle: '项目时间明细',
+      trendTitle: '工时走势', distTitle: '项目分布', heatmapTitle: '活跃热力图',
       upload: '上传 Excel', backend: '后台连接', connected: '已连接', disconnected: '未连接', checking: '检查中...',
       success: '成功！已处理', uploadFailed: '上传失败', none: '全体',
       targetHours: '应填报工时', perPeriod: 'h / 周期',
@@ -113,14 +112,14 @@ const App = () => {
       selectProjects: '选择分析项目（可多选）'
     },
     en: {
-      dashboard: 'Dashboard', stats: 'Statistics', timeline: 'Timeline', activity: 'Activity',
+      dashboard: 'Dashboard', stats: 'Statistics', activity: 'Activity',
       reporting: 'Reporting Rate', approval: 'Approval Rate',
       title: 'Timesheet Insights', subtitle: 'Real-time statistics and analysis', sync: 'Sync Data', filters: 'Filters:',
       reportingTitle: 'Reporting Rate', reportingSubtitle: 'Filter timesheet reporting discrepancy information',
       approvalTitle: 'Approval Completion Rate', approvalSubtitle: 'View pending approval timesheet entries',
       period: { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly' },
       totalHours: 'Total Hours', avgProject: 'Avg. per Project', dataPoints: 'Data Points',
-      trendTitle: 'Hours Trend', distTitle: 'Project Distribution', heatmapTitle: 'Activity Heatmap', ganttTitle: 'Project Timeline',
+      trendTitle: 'Hours Trend', distTitle: 'Project Distribution', heatmapTitle: 'Activity Heatmap',
       upload: 'Upload Excel', backend: 'Backend', connected: 'Connected', disconnected: 'Disconnected', checking: 'Checking...',
       success: 'Success! Processed', uploadFailed: 'Upload failed', none: 'All',
       targetHours: 'Target Hours', perPeriod: 'h / Period',
@@ -148,7 +147,7 @@ const App = () => {
       activeFilters: '已启用筛选',
       visibleProjects: '可见项目',
       visibleDepts: '可见部门',
-      topDept: '重点部门',
+      topDept: '最高工时部门',
       periodRange: '周期范围',
       deptGroups: '部门分组',
       liveSync: '在线同步',
@@ -160,7 +159,7 @@ const App = () => {
       activeFilters: 'Active Filters',
       visibleProjects: 'Visible Projects',
       visibleDepts: 'Visible Depts',
-      topDept: 'Top Dept',
+      topDept: 'Top Hours Dept',
       periodRange: 'Period Range',
       deptGroups: 'Dept Groups',
       liveSync: 'Live Sync',
@@ -179,11 +178,6 @@ const App = () => {
         eyebrow: t.projectAnalysis,
         title: t.deptContribution,
         description: t.selectProjects
-      },
-      gantt: {
-        eyebrow: t.timeline,
-        title: t.ganttTitle,
-        description: t.subtitle
       },
       reporting: {
         eyebrow: t.reporting,
@@ -204,24 +198,21 @@ const App = () => {
     t.approvalTitle,
     t.dashboard,
     t.deptContribution,
-    t.ganttTitle,
     t.projectAnalysis,
     t.reporting,
     t.reportingSubtitle,
     t.reportingTitle,
     t.selectProjects,
     t.subtitle,
-    t.timeline,
     t.title
   ]);
 
   const navItems = useMemo(() => ([
     { id: 'overview', label: t.dashboard, icon: LayoutDashboard },
     { id: 'project_analysis', label: t.projectAnalysis, icon: BarChart3 },
-    { id: 'gantt', label: t.timeline, icon: Users },
     { id: 'reporting', label: t.reporting, icon: ClipboardCheck },
     { id: 'approval', label: t.approval, icon: CheckCircle2 }
-  ]), [t.approval, t.dashboard, t.projectAnalysis, t.reporting, t.timeline]);
+  ]), [t.approval, t.dashboard, t.projectAnalysis, t.reporting]);
 
   const statusLabel = status === 'connected' ? t.connected : status === 'error' ? t.disconnected : t.checking;
 
@@ -534,14 +525,6 @@ const App = () => {
       ];
     }
 
-    if (activeTab === 'gantt') {
-      return [
-        { label: uiText.periodRange, value: overviewTimeframeLabel },
-        { label: uiText.visibleProjects, value: dashAvailableProjects.length },
-        { label: t.dataPoints, value: dataPointsValue }
-      ];
-    }
-
     if (activeTab === 'reporting') {
       return [
         { label: t.targetHours, value: `${targetHours}h` },
@@ -563,13 +546,11 @@ const App = () => {
     approvalYear,
     dashAvailableDepts.length,
     dashAvailableProjects.length,
-    dataPointsValue,
     filterMonth,
     filterWeek,
     filterYear,
     overviewTimeframeLabel,
     reportingDeptCount,
-    t.dataPoints,
     t.pendingCount,
     t.pendingHours,
     t.targetHours,
@@ -705,50 +686,6 @@ const App = () => {
       ]
     };
   }, [filteredData, t.totalHours, t.avgMonthlyHours]);
-
-  const ganttOpt = useMemo(() => {
-    const projData = {};
-    filteredData.forEach(item => {
-      if (!projData[item.project_name]) {
-        projData[item.project_name] = { start: item.start_date, end: item.end_date };
-      } else {
-        if (dayjs(item.start_date).isBefore(projData[item.project_name].start)) projData[item.project_name].start = item.start_date;
-        if (dayjs(item.end_date).isAfter(projData[item.project_name].end)) projData[item.project_name].end = item.end_date;
-      }
-    });
-
-    const categories = Object.keys(projData);
-    const chartData = categories.map((cat, index) => {
-      return {
-        name: cat,
-        value: [index, projData[cat].start, projData[cat].end],
-        itemStyle: { normal: { color: EDITORIAL_THEME.accent } }
-      };
-    });
-
-    return {
-      tooltip: { ...tooltipBase, formatter: (params) => `${params.name}: ${params.value[1]} ~ ${params.value[2]}` },
-      grid: { left: '150px', right: '4%', top: '6%', bottom: '6%' },
-      xAxis: { type: 'time', axisLabel: chartAxis, splitLine: chartSplitLine },
-      yAxis: { data: categories, axisLabel: chartAxis },
-      series: [{
-        type: 'custom',
-        renderItem: (params, api) => {
-          const categoryIndex = api.value(0);
-          const start = api.coord([api.value(1), categoryIndex]);
-          const end = api.coord([api.value(2), categoryIndex]);
-          const height = api.size([0, 1])[1] * 0.6;
-          return {
-            type: 'rect',
-            shape: { x: start[0], y: start[1] - height / 2, width: end[0] - start[0], height: height },
-            style: api.style()
-          };
-        },
-        encode: { x: [1, 2], y: 0 },
-        data: chartData
-      }]
-    };
-  }, [filteredData]);
 
   const projectAnalysisOpt = useMemo(() => {
     let periodType = 'monthly';
@@ -1059,49 +996,7 @@ const App = () => {
                 </div>
                 <ReactECharts option={rankingChartOpt} style={{ height: '400px' }} notMerge={true} />
               </div>
-
-              <div className="card overview-insight-card elevated-module">
-                <div className="card-heading-row">
-                  <div>
-                    <h3>{t.stats}</h3>
-                    <p className="module-caption">{uiText.workspace}</p>
-                  </div>
-                  <div className="module-kicker">{t.dashboard}</div>
-                </div>
-
-                <div className="insight-grid">
-                  <div className="insight-item">
-                    <span>{uiText.topDept}</span>
-                    <strong>{topDepartment}</strong>
-                  </div>
-                  <div className="insight-item">
-                    <span>{uiText.activeFilters}</span>
-                    <strong>{activeFilterCount}</strong>
-                  </div>
-                  <div className="insight-item">
-                    <span>{uiText.visibleProjects}</span>
-                    <strong>{dashAvailableProjects.length}</strong>
-                  </div>
-                  <div className="insight-item">
-                    <span>{t.backend}</span>
-                    <strong>{statusLabel}</strong>
-                  </div>
-                </div>
-              </div>
             </div>
-          </div>
-        )}
-
-        {activeTab === 'gantt' && (
-          <div className="card chart-card elevated-module">
-            <div className="card-heading-row">
-              <div>
-                <h3>{t.ganttTitle}</h3>
-                <p className="module-caption">{pageMeta.description}</p>
-              </div>
-              <div className="module-kicker">{overviewTimeframeLabel}</div>
-            </div>
-            <ReactECharts option={ganttOpt} style={{ height: '500px' }} />
           </div>
         )}
 
