@@ -1,23 +1,25 @@
 ---
 title: Anx Showtime
-emoji: 🏃
+emoji: "📊"
 colorFrom: indigo
-colorTo: purple
+colorTo: blue
 sdk: docker
 pinned: false
 license: apache-2.0
 ---
 
-# Anx Showtime - 工时洞察系统
+# Anx Showtime
 
-这是一个集成的工时统计与分析平台，支持从 Excel 自动导入数据，并生成多维度的可视化报表。
+Project timesheet and schedule analytics dashboard.
 
-## 主要功能
-*   **仪表盘**: 概览核心工时数据与趋势。
-*   **项目工时分析**: 查看各部门在具体项目中的工时贡献占比。
-*   **项目时间轴**: 以甘特图形式展示项目进度明细。
-*   **完整填报率**: 自动分析员工工时填报差异。
-*   **审批完成率**: 统计待审批工时状态。
+## Stack
 
-## 运行环境
-使用 Docker 容器化部署，包含前端 (Vite) 和后端 (FastAPI)。
+- Frontend: React + Vite
+- Backend: FastAPI
+- Deployment: Docker on Hugging Face Spaces
+
+## Notes
+
+- Root `README.md` includes the Hugging Face Space configuration front matter.
+- Frontend source lives under `frontend/`.
+- Backend source lives under `backend/`.
