@@ -62,6 +62,7 @@ const App = () => {
   const [dashYear, setDashYear] = useState('');
   const [dashMonth, setDashMonth] = useState('');
   const [dashWeek, setDashWeek] = useState('');
+  const [dashGranularity, setDashGranularity] = useState('monthly');
   const [dashSelectedDepts, setDashSelectedDepts] = useState(new Set());
   const [dashSelectedProjects, setDashSelectedProjects] = useState(new Set());
   const [dashDeptOpen, setDashDeptOpen] = useState(false);
@@ -100,6 +101,7 @@ const App = () => {
       export: '导出 Excel', noIssues: '所有部门填报正常，未发现差异。',
       deficit: '不足', excess: '超出',
       selectYear: '选择年度', selectMonth: '选择月份', selectWeek: '选择周（可选）',
+      chartUnit: '图表单位', autoWeekly: '当前按周',
       allMonths: '全年', allWeeks: '全月',
       filterDept: '选择部门（可多选）', allDepts: '全部部门',
       pleaseSelectYear: '请先选择年度',
@@ -127,6 +129,7 @@ const App = () => {
       export: 'Export Excel', noIssues: 'All departments are reporting correctly. No issues found.',
       deficit: 'Deficit', excess: 'Excess',
       selectYear: 'Select Year', selectMonth: 'Select Month', selectWeek: 'Select Week (optional)',
+      chartUnit: 'Chart Unit', autoWeekly: 'Auto Weekly',
       allMonths: 'All Months', allWeeks: 'All Weeks',
       filterDept: 'Filter Departments', allDepts: 'All Depts',
       pleaseSelectYear: 'Please select a year first',
@@ -507,6 +510,9 @@ const App = () => {
     return uiText.allPeriods;
   }, [dashMonth, dashWeek, dashYear, uiText.allPeriods]);
 
+  const effectiveDashGranularity = useMemo(() => (dashMonth || dashWeek ? 'weekly' : dashGranularity), [dashGranularity, dashMonth, dashWeek]);
+  const isDashGranularityLocked = Boolean(dashMonth || dashWeek);
+
   const topDepartment = useMemo(() => {
     const grouped = dataHelper.groupByField(filteredData, 'department').sort((a, b) => b.value - a.value);
     return grouped[0]?.name || '—';
@@ -563,14 +569,7 @@ const App = () => {
   ]);
 
   const trendChartOpt = useMemo(() => {
-    // Determine aggregation dynamically based on what's selected
-    let aggType = 'monthly';
-    if (dashWeek) aggType = 'weekly';
-    else if (dashMonth) aggType = 'weekly';
-    else if (dashYear) aggType = 'monthly';
-    else aggType = 'quarterly'; // all data view
-
-    const agg = dataHelper.aggregateProjectData(filteredData, aggType);
+    const agg = dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity);
     // The structure of `agg` from dataHelper.aggregateProjectData is expected to be:
     // { projects: [...], labels: [...], series: [...] }
     // The instruction provided `const projNames = Object.keys(agg); const periods = Array.from(new Set(projNames.flatMap(p => Object.keys(agg[p])))).sort();`
@@ -602,7 +601,7 @@ const App = () => {
         }
       }))
     };
-  }, [filteredData, dashYear, dashMonth, dashWeek]);
+  }, [effectiveDashGranularity, filteredData]);
 
   const rankingChartOpt = useMemo(() => {
     const grouped = dataHelper.groupByField(filteredData, 'project_name');
@@ -688,12 +687,7 @@ const App = () => {
   }, [filteredData, t.totalHours, t.avgMonthlyHours]);
 
   const projectAnalysisOpt = useMemo(() => {
-    let periodType = 'monthly';
-    if (dashWeek || dashMonth) periodType = 'weekly';
-    else if (dashYear) periodType = 'monthly';
-    else periodType = 'quarterly'; // all data view
-    
-    const analysisRes = dataHelper.aggregateProjectDeptData(filteredData, periodType);
+    const analysisRes = dataHelper.aggregateProjectDeptData(filteredData, effectiveDashGranularity);
     
     return {
       tooltip: {
@@ -731,7 +725,7 @@ const App = () => {
         }
       }))
     };
-  }, [filteredData, dashYear, dashMonth, dashWeek, t.totalHours]);
+  }, [effectiveDashGranularity, filteredData, t.totalHours]);
 
   return (
     <div className={`app-shell ${isEmbed ? 'is-embed' : ''}`}>
@@ -890,6 +884,31 @@ const App = () => {
                     </select>
                   </div>
                 )}
+
+                <div className="filter-group granularity-filter">
+                  <label>{t.chartUnit}</label>
+                  <div className="granularity-toggle" role="tablist" aria-label={t.chartUnit}>
+                    <button
+                      type="button"
+                      className={!isDashGranularityLocked && dashGranularity === 'monthly' ? 'is-active' : ''}
+                      onClick={() => setDashGranularity('monthly')}
+                      disabled={isDashGranularityLocked}
+                    >
+                      {t.period.monthly}
+                    </button>
+                    <button
+                      type="button"
+                      className={!isDashGranularityLocked && dashGranularity === 'quarterly' ? 'is-active' : ''}
+                      onClick={() => setDashGranularity('quarterly')}
+                      disabled={isDashGranularityLocked}
+                    >
+                      {t.period.quarterly}
+                    </button>
+                  </div>
+                  {isDashGranularityLocked && (
+                    <span className="granularity-hint">{t.autoWeekly}</span>
+                  )}
+                </div>
 
                 {/* Department Multi-select Dropdown */}
                 <div className="filter-group dropdown-container">

@@ -108,6 +108,33 @@ class FrontendStyleDensityTests(unittest.TestCase):
             r"\.hours-input\s*\{[^}]*width:\s*4rem;[^}]*min-height:\s*1\.95rem;"
         )
 
+    def test_dashboard_granularity_toggle_is_present_and_compact(self):
+        self.assertIn(
+            "const [dashGranularity, setDashGranularity] = useState('monthly');",
+            self.app,
+        )
+        self.assertIn(
+            "const effectiveDashGranularity = useMemo(() => (dashMonth || dashWeek ? 'weekly' : dashGranularity), [dashGranularity, dashMonth, dashWeek]);",
+            self.app,
+        )
+        self.assertIn(
+            "dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity)",
+            self.app,
+        )
+        self.assertIn(
+            "dataHelper.aggregateProjectDeptData(filteredData, effectiveDashGranularity)",
+            self.app,
+        )
+        self.assertIn('className="granularity-toggle"', self.app)
+        self.assertIn('{t.period.monthly}', self.app)
+        self.assertIn('{t.period.quarterly}', self.app)
+        self.assertCssPattern(
+            r"\.granularity-toggle\s*\{[^}]*padding:\s*0\.2rem;[^}]*border-radius:\s*16px;"
+        )
+        self.assertCssPattern(
+            r"\.granularity-toggle button\s*\{[^}]*min-height:\s*2rem;[^}]*font-size:\s*0\.76rem;"
+        )
+
     def test_summary_pills_and_table_copy_are_reduced(self):
         self.assertCssPattern(
             r"\.inline-summary-stats \.stat-item\s*\{[^}]*font-size:\s*0\.74rem;"
