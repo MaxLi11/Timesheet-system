@@ -465,20 +465,20 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
     {
       type: 'custom',
       name: lang === 'zh' ? '节点进度' : 'Milestone Progress',
+      yAxisIndex: 1,
       renderItem: (params, api) => {
         const bar = milestoneProgressBars[params.dataIndex];
         if (!bar) return null;
 
         const barHeight = 6;
-        const barSpacing = 14;
-        const topMargin = 5;
-        const y = topMargin + bar.yPosition * barSpacing;
-
         const children = [];
 
-        // 计算坐标
-        const plannedCoord = bar.hasPlanned ? api.coord([bar.plannedIndex, 0]) : null;
-        const actualCoord = bar.hasActual ? api.coord([bar.actualIndex, 0]) : null;
+        // 使用第二个Y轴的坐标系统
+        const yCoord = api.coord([0, bar.yPosition])[1];
+
+        // 计算X坐标
+        const plannedCoord = bar.hasPlanned ? api.coord([bar.plannedIndex, bar.yPosition]) : null;
+        const actualCoord = bar.hasActual ? api.coord([bar.actualIndex, bar.yPosition]) : null;
 
         // 绘制背景横条
         if (plannedCoord && actualCoord) {
@@ -486,7 +486,7 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
           const endX = Math.max(plannedCoord[0], actualCoord[0]);
           children.push({
             type: 'rect',
-            shape: { x: startX, y: y - barHeight / 2, width: endX - startX, height: barHeight, r: barHeight / 2 },
+            shape: { x: startX, y: yCoord - barHeight / 2, width: endX - startX, height: barHeight, r: barHeight / 2 },
             style: { fill: 'rgba(140, 156, 184, 0.15)', stroke: 'rgba(126, 145, 175, 0.3)', lineWidth: 1 }
           });
         }
@@ -495,14 +495,14 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         if (plannedCoord) {
           children.push({
             type: 'circle',
-            shape: { cx: plannedCoord[0], cy: y, r: 4 },
+            shape: { cx: plannedCoord[0], cy: yCoord, r: 4 },
             style: { fill: SCHEDULE_SERIES_COLORS.planned, stroke: '#fff', lineWidth: 1.5 }
           });
           children.push({
             type: 'text',
             style: {
               x: plannedCoord[0],
-              y: y - 10,
+              y: yCoord - 10,
               text: formatCompactScheduleDate(bar.plannedDate),
               fill: SCHEDULE_SERIES_COLORS.planned,
               font: '700 9px "IBM Plex Sans", sans-serif',
@@ -515,14 +515,14 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         if (actualCoord) {
           children.push({
             type: 'circle',
-            shape: { cx: actualCoord[0], cy: y, r: 4 },
+            shape: { cx: actualCoord[0], cy: yCoord, r: 4 },
             style: { fill: SCHEDULE_SERIES_COLORS.actual, stroke: '#fff', lineWidth: 1.5 }
           });
           children.push({
             type: 'text',
             style: {
               x: actualCoord[0],
-              y: y - 10,
+              y: yCoord - 10,
               text: formatCompactScheduleDate(bar.actualDate),
               fill: SCHEDULE_SERIES_COLORS.actual,
               font: '700 9px "IBM Plex Sans", sans-serif',
@@ -579,7 +579,7 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         `;
       }
     },
-    grid: { left: 110, right: 132, top: 100, bottom: 80 },
+    grid: { left: 110, right: 180, top: 40, bottom: 80 },
     xAxis: {
       type: 'category',
       position: 'top',
@@ -593,15 +593,28 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
       axisLine: { lineStyle: { color: EDITORIAL_THEME.border } },
       splitLine: chartSplitLine
     },
-    yAxis: {
-      type: 'value',
-      min: 0,
-      axisLabel: {
-        ...chartAxis,
-        formatter: value => `${value}h`
+    yAxis: [
+      {
+        type: 'value',
+        min: 0,
+        axisLabel: {
+          ...chartAxis,
+          formatter: value => `${value}h`
+        },
+        splitLine: chartSplitLine
       },
-      splitLine: chartSplitLine
-    },
+      {
+        type: 'category',
+        position: 'right',
+        data: milestones.map(m => m.name),
+        axisLabel: {
+          ...chartAxis,
+          fontSize: 9
+        },
+        axisTick: { show: false },
+        axisLine: { show: false }
+      }
+    ],
     series,
     graphic: [
       {
