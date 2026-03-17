@@ -616,14 +616,19 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         position: 'top',
         min: monthScale.min,
         max: monthScale.max,
-        interval: 1,
+        splitNumber: monthScale.monthLabels.length,
         axisLabel: {
           ...chartAxis,
           fontSize: 10.5,
           formatter: (value) => {
-            const index = Math.round(value + 0.5);
-            return formatScheduleMonthLabel(monthScale.monthLabels[index] || '');
-          }
+            const index = Math.round(value);
+            if (index >= 0 && index < monthScale.monthLabels.length) {
+              return formatScheduleMonthLabel(monthScale.monthLabels[index]);
+            }
+            return '';
+          },
+          showMinLabel: false,
+          showMaxLabel: false
         },
         axisTick: { show: false },
         axisLine: { lineStyle: { color: EDITORIAL_THEME.border } },
