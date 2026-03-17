@@ -617,7 +617,7 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
           ...chartAxis,
           fontSize: 10.5,
           formatter: (value) => {
-            const index = Math.round(value);
+            const index = Math.round(value + 0.5);
             return formatScheduleMonthLabel(monthScale.monthLabels[index] || '');
           }
         },
