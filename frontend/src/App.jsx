@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   LayoutDashboard,
   Upload,
@@ -77,7 +77,23 @@ const buildScheduleDeltaLabel = (value, lang) => {
 
 const buildIntervalLabel = (interval) => `${interval.from_milestone} -> ${interval.to_milestone}`;
 
-const buildProjectScheduleChartOption = (project, lang, t) => {
+const formatScheduleMonthLabel = (value) => {
+  if (!value) return '--';
+  const [year, month] = String(value).split('-');
+  if (!year || !month) return value;
+  const monthNumber = Number(month);
+  if (Number.isNaN(monthNumber)) return value;
+  return `${year}.${monthNumber}`;
+};
+
+const formatCompactScheduleDate = (value) => {
+  if (!value) return '';
+  const parsedValue = dayjs(value);
+  if (!parsedValue.isValid()) return '';
+  return dayjs(value).format('M.D');
+};
+
+const buildLegacyProjectScheduleChartOption = (project, lang, t) => {
   const milestones = project?.milestones || [];
   const intervals = project?.intervals || [];
   const allDates = milestones
@@ -325,6 +341,356 @@ const buildProjectScheduleChartOption = (project, lang, t) => {
   };
 };
 
+const buildScheduleMonthScale = (dateValues) => {
+  const validDates = dateValues
+    .filter(Boolean)
+    .map(value => dayjs(value))
+    .filter(value => value.isValid());
+  const fallbackDate = dayjs();
+  const initialDate = validDates[0] || fallbackDate;
+  const startMonth = initialDate.startOf('month');
+  const endMonth = validDates.reduce(
+    (latest, current) => (current.isAfter(latest) ? current : latest),
+    initialDate
+  ).startOf('month');
+  const monthStarts = [];
+  let cursor = startMonth;
+
+  while (cursor.isBefore(endMonth) || cursor.isSame(endMonth, 'month')) {
+    monthStarts.push(cursor);
+    cursor = cursor.add(1, 'month');
+  }
+
+  const monthIndexMap = new Map(
+    monthStarts.map((monthStart, index) => [monthStart.format('YYYY-MM'), index])
+  );
+
+  return {
+    monthLabels: monthStarts.map(monthStart => monthStart.format('YYYY-MM')),
+    min: -0.5,
+    max: Math.max(monthStarts.length - 0.5, 0.5),
+    toAxisValue: (value) => {
+      if (!value) return null;
+      const date = dayjs(value);
+      if (!date.isValid()) return null;
+      const monthIndex = monthIndexMap.get(date.format('YYYY-MM'));
+      if (monthIndex === undefined) return null;
+      const dayFraction = (date.date() - 0.5) / date.daysInMonth();
+      return monthIndex - 0.5 + Math.min(Math.max(dayFraction, 0), 1);
+    }
+  };
+};
+
+const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []) => {
+  const milestones = project?.milestones || [];
+  const mappedProjects = project?.mapped_timesheet_projects || [];
+  const scheduleProjectEntries = timesheetEntries.filter(entry => mappedProjects.includes(entry.project_name));
+  const monthlyHours = dataHelper.aggregateProjectDeptData(scheduleProjectEntries, 'monthly');
+  const monthScale = buildScheduleMonthScale([
+    ...milestones.flatMap(milestone => [milestone.planned_date, milestone.actual_date]),
+    ...monthlyHours.labels.map(label => `${label}-01`)
+  ]);
+  const hasMonthlyHours = monthlyHours.series.some(series =>
+    series.data.some(value => Number(value || 0) > 0)
+  );
+  const monthlySeriesMaps = new Map(
+    monthlyHours.series.map(series => [
+      series.name,
+      new Map(monthlyHours.labels.map((label, index) => [label, Number(series.data[index] || 0)]))
+    ])
+  );
+  const departmentTotals = new Map(
+    monthlyHours.departments.map(department => [
+      department,
+      monthScale.monthLabels.reduce(
+        (sum, label) => sum + Number(monthlySeriesMaps.get(department)?.get(label) || 0),
+        0
+      )
+    ])
+  );
+  const departments = [...monthlyHours.departments].sort(
+    (a, b) => (departmentTotals.get(b) || 0) - (departmentTotals.get(a) || 0) || a.localeCompare(b)
+  );
+  const monthlyTotalsByLabel = new Map(
+    monthScale.monthLabels.map(label => [
+      label,
+      departments.reduce(
+        (sum, department) => sum + Number(monthlySeriesMaps.get(department)?.get(label) || 0),
+        0
+      )
+    ])
+  );
+  const milestoneProgressData = milestones.map((milestone, index) => {
+    const plannedValue = monthScale.toAxisValue(milestone.planned_date);
+    const actualValue = monthScale.toAxisValue(milestone.actual_date);
+    const anchorValue = plannedValue ?? actualValue ?? Math.max(monthScale.min + 0.16, monthScale.max - 0.16);
+    const pendingValue = actualValue ?? Math.min(monthScale.max - 0.08, anchorValue + 0.18);
+
+    return {
+      value: [plannedValue ?? anchorValue, actualValue ?? pendingValue, index],
+      milestone,
+      actualDateLabel: formatCompactScheduleDate(milestone.actual_date),
+      deltaLabel: buildScheduleDeltaLabel(milestone.delta_days, lang),
+      hasPlannedDate: Boolean(milestone.planned_date),
+      hasActualDate: Boolean(milestone.actual_date),
+      pendingLabel: lang === 'zh' ? '未到达' : 'Pending'
+    };
+  });
+
+  const series = [
+    ...departments.map((department, index) => ({
+      name: department,
+      type: 'bar',
+      stack: 'monthly-hours',
+      xAxisIndex: 0,
+      yAxisIndex: 0,
+      barMaxWidth: 28,
+      itemStyle: {
+        color: EDITORIAL_THEME.palette[index % EDITORIAL_THEME.palette.length],
+        borderRadius: [8, 8, 0, 0]
+      },
+      emphasis: { focus: 'series' },
+      data: monthScale.monthLabels.map((label, idx) => [
+        idx,
+        Number((monthlySeriesMaps.get(department)?.get(label) || 0).toFixed(1))
+      ])
+    })),
+    {
+      name: t.milestoneProgress,
+      type: 'custom',
+      xAxisIndex: 1,
+      yAxisIndex: 1,
+      data: milestoneProgressData,
+      renderItem: (params, api) => {
+        const item = milestoneProgressData[params.dataIndex];
+        const rowIndex = api.value(2);
+        const rowCoord = api.coord([monthScale.min, rowIndex]);
+        const plannedCoord = item.hasPlannedDate ? api.coord([api.value(0), rowIndex]) : null;
+        const actualCoord = item.hasActualDate ? api.coord([api.value(1), rowIndex]) : null;
+        const pendingCoord = !item.hasActualDate ? api.coord([api.value(1), rowIndex]) : null;
+        const trackStartX = plannedCoord?.[0] ?? actualCoord?.[0] ?? pendingCoord?.[0] ?? rowCoord[0];
+        const trackEndX = actualCoord?.[0] ?? pendingCoord?.[0] ?? trackStartX;
+        const left = Math.min(trackStartX, trackEndX);
+        const right = Math.max(trackStartX, trackEndX);
+        const trackHeight = Math.max(7, Math.min(12, api.size([0, 1])[1] * 0.26));
+        const trackWidth = Math.max(right - left, item.hasActualDate ? 4 : 16);
+        const y = rowCoord[1] - trackHeight / 2;
+        const lineHeight = Math.max(12, Math.min(22, api.size([0, 1])[1] * 0.64));
+        const lineTop = rowCoord[1] - lineHeight / 2;
+        const lineBottom = rowCoord[1] + lineHeight / 2;
+        const labelText = item.hasActualDate ? item.actualDateLabel : item.pendingLabel;
+        const labelX = (actualCoord?.[0] ?? pendingCoord?.[0] ?? right) + 7;
+
+        return {
+          type: 'group',
+          children: [
+            {
+              type: 'rect',
+              shape: {
+                x: left,
+                y,
+                width: trackWidth,
+                height: trackHeight,
+                r: trackHeight / 2
+              },
+              style: {
+                fill: item.hasActualDate ? 'rgba(140, 156, 184, 0.12)' : 'rgba(255, 139, 75, 0.08)',
+                stroke: item.hasActualDate ? 'rgba(126, 145, 175, 0.26)' : 'rgba(255, 139, 75, 0.34)',
+                lineWidth: 1,
+                lineDash: item.hasActualDate ? undefined : [4, 3]
+              }
+            },
+            ...(plannedCoord ? [{
+              type: 'line',
+              shape: {
+                x1: plannedCoord[0],
+                y1: lineTop,
+                x2: plannedCoord[0],
+                y2: lineBottom
+              },
+              style: {
+                stroke: SCHEDULE_SERIES_COLORS.planned,
+                lineWidth: 2,
+                opacity: 0.92
+              }
+            }] : []),
+            ...(actualCoord ? [{
+              type: 'line',
+              shape: {
+                x1: actualCoord[0],
+                y1: lineTop - 1,
+                x2: actualCoord[0],
+                y2: lineBottom + 1
+              },
+              style: {
+                stroke: SCHEDULE_SERIES_COLORS.actual,
+                lineWidth: 3,
+                shadowBlur: 10,
+                shadowColor: 'rgba(77, 114, 255, 0.22)'
+              }
+            }] : pendingCoord ? [{
+              type: 'line',
+              shape: {
+                x1: pendingCoord[0],
+                y1: lineTop,
+                x2: pendingCoord[0],
+                y2: lineBottom
+              },
+              style: {
+                stroke: SCHEDULE_SERIES_COLORS.pending,
+                lineWidth: 2,
+                lineDash: [4, 3],
+                opacity: 0.92
+              }
+            }] : []),
+            ...(labelText ? [{
+              type: 'text',
+              style: {
+                x: labelX,
+                y: rowCoord[1] - 6,
+                text: labelText,
+                fill: item.hasActualDate ? SCHEDULE_SERIES_COLORS.actual : SCHEDULE_SERIES_COLORS.pending,
+                font: '700 10px "IBM Plex Sans", "Noto Sans SC", sans-serif'
+              }
+            }] : [])
+          ]
+        };
+      }
+    }
+  ];
+
+  return {
+    color: EDITORIAL_THEME.palette,
+    animationDuration: 450,
+    legend: {
+      show: hasMonthlyHours,
+      data: departments,
+      type: 'scroll',
+      top: 206,
+      left: 'center',
+      right: 'auto',
+      bottom: 'auto',
+      itemGap: 14,
+      textStyle: chartText
+    },
+    tooltip: {
+      ...tooltipBase,
+      trigger: 'item',
+      formatter: (params) => {
+        if (params.seriesType === 'custom') {
+          const milestone = params.data?.milestone;
+          if (!milestone) return '';
+          const plannedDate = milestone.planned_date ? dayjs(milestone.planned_date).format('YYYY-MM-DD') : '--';
+          const actualDate = milestone.actual_date ? dayjs(milestone.actual_date).format('YYYY-MM-DD') : (lang === 'zh' ? '未到达' : 'Pending');
+          const deltaLabel = buildScheduleDeltaLabel(milestone.delta_days, lang) || '--';
+          return `
+            <div style="font-weight:800; margin-bottom:6px;">${milestone.name}</div>
+            <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '计划' : 'Planned'}</span><strong>${plannedDate}</strong></div>
+            <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '实际' : 'Actual'}</span><strong>${actualDate}</strong></div>
+            <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '变化' : 'Delta'}</span><strong>${deltaLabel}</strong></div>
+          `;
+        }
+
+        const monthLabelKey = params.name || params.axisValue || '--';
+        const monthLabel = formatScheduleMonthLabel(monthLabelKey);
+        return `
+          <div style="font-weight:800; margin-bottom:6px;">${monthLabel}</div>
+          <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '部门' : 'Department'}</span><strong>${params.seriesName}</strong></div>
+          <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '工时' : 'Hours'}</span><strong>${formatScheduleNumber(params.value)}h</strong></div>
+          <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '月度总工时' : 'Monthly Total'}</span><strong>${formatScheduleNumber(monthlyTotalsByLabel.get(monthLabelKey) || 0)}h</strong></div>
+        `;
+      }
+    },
+    grid: [
+      { left: 110, right: 132, top: 40, height: 176 },
+      { left: 110, right: 132, top: 242, height: 240 }
+    ],
+    xAxis: [
+      {
+        gridIndex: 0,
+        type: 'value',
+        position: 'top',
+        min: monthScale.min,
+        max: monthScale.max,
+        interval: 1,
+        axisLabel: {
+          ...chartAxis,
+          fontSize: 10.5,
+          formatter: (value) => {
+            const index = Math.round(value);
+            return formatScheduleMonthLabel(monthScale.monthLabels[index] || '');
+          }
+        },
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: EDITORIAL_THEME.border } },
+        splitLine: chartSplitLine
+      },
+      {
+        gridIndex: 1,
+        type: 'value',
+        min: monthScale.min,
+        max: monthScale.max,
+        interval: 1,
+        axisLabel: { show: false },
+        axisTick: { show: false },
+        axisLine: { show: false },
+        splitLine: { show: false }
+      }
+    ],
+    yAxis: [
+      {
+        gridIndex: 0,
+        type: 'value',
+        min: 0,
+        axisLabel: {
+          ...chartAxis,
+          formatter: value => `${value}h`
+        },
+        splitLine: chartSplitLine
+      },
+      {
+        gridIndex: 1,
+        type: 'category',
+        position: 'right',
+        data: milestones.map(milestone => milestone.name),
+        inverse: true,
+        axisLabel: {
+          ...chartAxis,
+          fontSize: 9,
+          width: 92,
+          overflow: 'truncate'
+        },
+        axisTick: { show: false },
+        axisLine: { show: false }
+      }
+    ],
+    series,
+    graphic: [
+      {
+        type: 'text',
+        left: 20,
+        top: 10,
+        style: {
+          text: t.monthlyHours,
+          fill: EDITORIAL_THEME.graphite,
+          font: '700 13px "IBM Plex Sans", "Noto Sans SC", sans-serif'
+        }
+      },
+      ...(!hasMonthlyHours ? [{
+        type: 'text',
+        left: 'center',
+        top: 168,
+        style: {
+          text: t.scheduleHoursEmpty,
+          fill: EDITORIAL_THEME.slateSoft,
+          font: '600 12px "IBM Plex Sans", "Noto Sans SC", sans-serif',
+          textAlign: 'center'
+        }
+      }] : [])
+    ]
+  };
+};
+
 const App = () => {
   const isEmbed = useMemo(() => new URLSearchParams(window.location.search).get('embed') === 'true', []);
   const [data, setData] = useState([]);
@@ -355,9 +721,9 @@ const App = () => {
   const [selectedProjects, setSelectedProjects] = useState(new Set()); // multi-select
   const [selectedApprover, setSelectedApprover] = useState(''); // single-select
   const [projectScheduleData, setProjectScheduleData] = useState({ projects: [] });
-  const [legacyProjectChartOpen, setLegacyProjectChartOpen] = useState(false);
   const [scheduleSelectedProjects, setScheduleSelectedProjects] = useState(new Set());
   const [scheduleProjectPickerOpen, setScheduleProjectPickerOpen] = useState(false);
+  const scheduleProjectPickerRef = useRef(null);
 
   const t = {
     zh: {
@@ -399,6 +765,9 @@ const App = () => {
       plannedCycle: '计划周期',
       actualCycle: '实际周期',
       deltaCycle: '变化天数',
+      scheduleLegendPlanned: '计划日期',
+      scheduleLegendActual: '实际日期',
+      scheduleLegendPending: '未到达',
       showChart: '展开图表',
       hideChart: '收起图表',
       noScheduleData: '暂无项目进度数据，请先上传项目进度 Excel',
@@ -437,7 +806,7 @@ const App = () => {
       legacyContributionTitle: 'Legacy Dept. Contribution',
       legacyContributionSubtitle: 'Keep the original contribution chart available as a collapsed reference.',
       scheduleMonitorTitle: 'Project Schedule Monitor',
-      scheduleMonitorSubtitle: 'Compare planned and actual milestones with interval department hour share.',
+      scheduleMonitorSubtitle: 'View monthly department hours with milestone progress bars in one chart.',
       uploadProjectSchedule: 'Upload Project Schedule Excel',
       scheduleUploadSuccess: 'Project schedule uploaded.',
       allScheduleProjects: 'All Schedule Projects',
@@ -446,15 +815,30 @@ const App = () => {
       plannedCycle: 'Planned Cycle',
       actualCycle: 'Actual Cycle',
       deltaCycle: 'Delta Days',
+      scheduleLegendPlanned: 'Planned',
+      scheduleLegendActual: 'Actual',
+      scheduleLegendPending: 'Pending',
       showChart: 'Show Chart',
       hideChart: 'Hide Chart',
       noScheduleData: 'No project schedule data yet. Upload the project schedule Excel first.',
+      monthlyHours: 'Monthly Department Hours',
+      milestoneProgress: 'Milestone Progress',
+      scheduleHoursEmpty: 'No Close hours are available for the current project yet.',
       milestoneTimeline: 'Milestone Planned / Actual Timeline',
       intervalShare: 'Department Share by Milestone Interval',
       intervalNoHours: 'No Close hours are available in the current milestone intervals.',
       filterScheduleProjects: 'Select Projects (multi-select)'
     }
   }[lang];
+
+  t.scheduleMonitorSubtitle = lang === 'zh'
+    ? '月度部门工时与项目节点进度条联动展示'
+    : 'View monthly department hours with milestone progress bars in one chart.';
+  t.monthlyHours = lang === 'zh' ? '月度部门工时' : 'Monthly Department Hours';
+  t.milestoneProgress = lang === 'zh' ? '项目节点进度' : 'Milestone Progress';
+  t.scheduleHoursEmpty = lang === 'zh'
+    ? '当前项目暂时没有 Close 工时'
+    : 'No Close hours are available for the current project yet.';
 
   const uiText = {
     zh: {
@@ -659,6 +1043,18 @@ const App = () => {
       return validSelections.length > 0 ? new Set(validSelections) : new Set([scheduleProjects[0].project_name]);
     });
   }, [projectScheduleData]);
+
+  useEffect(() => {
+    if (!scheduleProjectPickerOpen) return undefined;
+
+    const handleSchedulePickerPointerDown = (event) => {
+      if (scheduleProjectPickerRef.current?.contains(event.target)) return;
+      setScheduleProjectPickerOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handleSchedulePickerPointerDown);
+    return () => document.removeEventListener('pointerdown', handleSchedulePickerPointerDown);
+  }, [scheduleProjectPickerOpen]);
 
   // Reporting rate period options (available years / months / weeks from data)
   const periodOptions = useMemo(
@@ -944,10 +1340,10 @@ const App = () => {
   const scheduleChartOptions = useMemo(() => {
     const chartMap = new Map();
     scheduleProjects.forEach(project => {
-      chartMap.set(project.project_name, buildProjectScheduleChartOption(project, lang, t));
+      chartMap.set(project.project_name, buildProjectScheduleChartOption(project, lang, t, data));
     });
     return chartMap;
-  }, [lang, scheduleProjects, t]);
+  }, [data, lang, scheduleProjects, t]);
 
   const toggleScheduleProject = (projectName) => {
     setScheduleSelectedProjects(prev => {
@@ -1079,47 +1475,6 @@ const App = () => {
     };
   }, [filteredData, t.totalHours, t.avgMonthlyHours]);
 
-  const projectAnalysisOpt = useMemo(() => {
-    const analysisRes = dataHelper.aggregateProjectDeptData(filteredData, effectiveDashGranularity);
-    
-    return {
-      tooltip: {
-        ...tooltipBase,
-        trigger: 'axis',
-        formatter: (params) => {
-          let res = `<div style="margin-bottom: 5px; font-weight: 800;">${params[0].name}</div>`;
-          let total = 0;
-          params.forEach(p => total += (p.value || 0));
-          params.forEach(p => {
-            const val = p.value || 0;
-            const percent = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
-            res += `<div style="display:flex; justify-content:space-between; gap:15px; margin-bottom:2px;">
-                      <span>${p.marker} ${p.seriesName}</span>
-                      <span style="font-weight:700;">${val} h (${percent}%)</span>
-                    </div>`;
-          });
-          res += `<div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid ${EDITORIAL_THEME.mist}; font-weight: 800; display:flex; justify-content:space-between;">
-                    <span>Total</span>
-                    <span>${total.toFixed(1)} h</span>
-                  </div>`;
-          return res;
-        }
-      },
-      color: EDITORIAL_THEME.palette,
-      legend: { textStyle: chartText, type: 'scroll', bottom: 10 },
-      grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
-      xAxis: { type: 'category', data: analysisRes.labels, axisLabel: chartAxis },
-      yAxis: { type: 'value', name: t.totalHours, axisLabel: chartAxis, splitLine: chartSplitLine },
-      series: analysisRes.series.map((s, index) => ({
-        ...s,
-        itemStyle: {
-          borderRadius: [4, 4, 0, 0],
-          color: EDITORIAL_THEME.palette[index % EDITORIAL_THEME.palette.length]
-        }
-      }))
-    };
-  }, [effectiveDashGranularity, filteredData, t.totalHours]);
-
   return (
     <div className={`app-shell ${isEmbed ? 'is-embed' : ''}`}>
       <div className="app-glow app-glow-one" aria-hidden="true" />
@@ -1242,7 +1597,7 @@ const App = () => {
           </section>
         )}
 
-        {(activeTab === 'overview' || activeTab === 'project_analysis') && (
+        {activeTab === 'overview' && (
           <div className="reporting-tab section-shell">
             <div className="reporting-top-bar">
               <div className="reporting-filters">
@@ -1379,55 +1734,31 @@ const App = () => {
 
         {activeTab === 'project_analysis' && (
           <div className="project-schedule-section section-shell">
-            <div className="legacy-project-chart-card card elevated-module">
-              <div className="card-heading-row">
-                <div>
-                  <h3>{t.legacyContributionTitle}</h3>
-                  <p className="module-caption">{t.legacyContributionSubtitle}</p>
-                </div>
-                <button
-                  type="button"
-                  className="legacy-chart-toggle"
-                  onClick={() => setLegacyProjectChartOpen(prev => !prev)}
-                >
-                  {legacyProjectChartOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  <span>{legacyProjectChartOpen ? t.hideChart : t.showChart}</span>
-                </button>
-              </div>
-              {legacyProjectChartOpen && (
-                <ReactECharts option={projectAnalysisOpt} style={{ height: '440px' }} notMerge={true} />
-              )}
-            </div>
-
             <div className="card project-schedule-shell elevated-module">
               <div className="card-heading-row">
                 <div>
                   <h3>{t.scheduleMonitorTitle}</h3>
                   <p className="module-caption">{t.scheduleMonitorSubtitle}</p>
                 </div>
-                <label className="utility-upload schedule-upload-control">
-                  <Upload size={18} />
-                  <span>{t.uploadProjectSchedule}</span>
-                  <input type="file" hidden onChange={handleProjectScheduleUpload} />
-                </label>
-              </div>
-
-              <div className="project-schedule-toolbar">
-                <div className="filter-group dropdown-container">
-                  <label>{t.filterScheduleProjects}</label>
-                  <button
-                    type="button"
-                    className="dropdown-button"
-                    onClick={() => setScheduleProjectPickerOpen(prev => !prev)}
-                  >
-                    {scheduleSelectedProjects.size === 0
-                      ? t.allScheduleProjects
-                      : (lang === 'zh' ? `已选 ${scheduleSelectedProjects.size} 个` : `${scheduleSelectedProjects.size} selected`)}
-                    <ChevronDown size={16} />
-                  </button>
-                  {scheduleProjectPickerOpen && (
-                    <>
-                      <div className="dropdown-overlay" onClick={() => setScheduleProjectPickerOpen(false)} />
+                <div className="project-schedule-actions">
+                  <label className="utility-upload schedule-upload-control">
+                    <Upload size={18} />
+                    <span>{t.uploadProjectSchedule}</span>
+                    <input type="file" hidden onChange={handleProjectScheduleUpload} />
+                  </label>
+                  <div className="filter-group dropdown-container" ref={scheduleProjectPickerRef}>
+                    <label>{t.filterScheduleProjects}</label>
+                    <button
+                      type="button"
+                      className="dropdown-button"
+                      onClick={() => setScheduleProjectPickerOpen(prev => !prev)}
+                    >
+                      {scheduleSelectedProjects.size === 0
+                        ? t.allScheduleProjects
+                        : (lang === 'zh' ? `已选 ${scheduleSelectedProjects.size} 个` : `${scheduleSelectedProjects.size} selected`)}
+                      <ChevronDown size={16} />
+                    </button>
+                    {scheduleProjectPickerOpen && (
                       <div className="approval-project-panel">
                         <div className="project-panel-header">
                           <span className="filter-group-label">{t.filterScheduleProjects}</span>
@@ -1454,8 +1785,8 @@ const App = () => {
                           {scheduleProjects.length === 0 && <span className="text-muted empty-state-text">{t.noScheduleData}</span>}
                         </div>
                       </div>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1499,9 +1830,24 @@ const App = () => {
                         </div>
                       </div>
 
+                      <div className="project-schedule-legend" aria-label={t.milestoneProgress}>
+                        <span className="project-schedule-legend-item">
+                          <span className="project-schedule-legend-marker planned" aria-hidden="true" />
+                          <span>{t.scheduleLegendPlanned}</span>
+                        </span>
+                        <span className="project-schedule-legend-item">
+                          <span className="project-schedule-legend-marker actual" aria-hidden="true" />
+                          <span>{t.scheduleLegendActual}</span>
+                        </span>
+                        <span className="project-schedule-legend-item">
+                          <span className="project-schedule-legend-marker pending" aria-hidden="true" />
+                          <span>{t.scheduleLegendPending}</span>
+                        </span>
+                      </div>
+
                       <ReactECharts
                         option={scheduleChartOptions.get(project.project_name)}
-                        style={{ height: '610px' }}
+                        style={{ height: '560px' }}
                         notMerge={true}
                       />
                     </article>
