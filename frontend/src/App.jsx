@@ -435,44 +435,17 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
     };
   });
 
-  // 构建节点标记线数据
-  const milestoneMarkLines = [];
-  milestones.forEach((milestone) => {
-    const plannedIndex = monthScale.getDateIndex(milestone.planned_date);
-    const actualIndex = monthScale.getDateIndex(milestone.actual_date);
-
-    // 预计时间标记线（蓝色）
-    if (plannedIndex !== null) {
-      milestoneMarkLines.push({
-        name: `${milestone.name} (计划)`,
-        xAxis: plannedIndex,
-        lineStyle: { color: SCHEDULE_SERIES_COLORS.planned, width: 2, type: 'solid' },
-        label: {
-          show: true,
-          position: 'end',
-          formatter: formatCompactScheduleDate(milestone.planned_date),
-          color: SCHEDULE_SERIES_COLORS.planned,
-          fontSize: 10
-        }
-      });
-    }
-
-    // 实际时间标记线（橙色）
-    if (actualIndex !== null) {
-      milestoneMarkLines.push({
-        name: `${milestone.name} (实际)`,
-        xAxis: actualIndex,
-        lineStyle: { color: SCHEDULE_SERIES_COLORS.actual, width: 2, type: 'solid' },
-        label: {
-          show: true,
-          position: 'end',
-          formatter: formatCompactScheduleDate(milestone.actual_date),
-          color: SCHEDULE_SERIES_COLORS.actual,
-          fontSize: 10
-        }
-      });
-    }
-  });
+  // 构建节点进度条数据
+  const milestoneProgressBars = milestones.map((milestone, index) => ({
+    name: milestone.name,
+    plannedIndex: monthScale.getDateIndex(milestone.planned_date),
+    actualIndex: monthScale.getDateIndex(milestone.actual_date),
+    plannedDate: milestone.planned_date,
+    actualDate: milestone.actual_date,
+    yPosition: index,
+    hasPlanned: Boolean(milestone.planned_date),
+    hasActual: Boolean(milestone.actual_date)
+  }));
 
   const series = [
     ...departments.map((department, index) => ({
@@ -487,16 +460,82 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
       emphasis: { focus: 'series' },
       data: monthScale.monthLabels.map(label =>
         Number((monthlySeriesMaps.get(department)?.get(label) || 0).toFixed(1))
-      ),
-      // 只在第一个系列上添加所有节点标记线
-      ...(index === 0 ? {
-        markLine: {
-          silent: false,
-          symbol: 'none',
-          data: milestoneMarkLines
+      )
+    })),
+    {
+      type: 'custom',
+      name: lang === 'zh' ? '节点进度' : 'Milestone Progress',
+      renderItem: (params, api) => {
+        const bar = milestoneProgressBars[params.dataIndex];
+        if (!bar) return null;
+
+        const barHeight = 6;
+        const barSpacing = 14;
+        const topMargin = 5;
+        const y = topMargin + bar.yPosition * barSpacing;
+
+        const children = [];
+
+        // 计算坐标
+        const plannedCoord = bar.hasPlanned ? api.coord([bar.plannedIndex, 0]) : null;
+        const actualCoord = bar.hasActual ? api.coord([bar.actualIndex, 0]) : null;
+
+        // 绘制背景横条
+        if (plannedCoord && actualCoord) {
+          const startX = Math.min(plannedCoord[0], actualCoord[0]);
+          const endX = Math.max(plannedCoord[0], actualCoord[0]);
+          children.push({
+            type: 'rect',
+            shape: { x: startX, y: y - barHeight / 2, width: endX - startX, height: barHeight, r: barHeight / 2 },
+            style: { fill: 'rgba(140, 156, 184, 0.15)', stroke: 'rgba(126, 145, 175, 0.3)', lineWidth: 1 }
+          });
         }
-      } : {})
-    }))
+
+        // 预计时间标记
+        if (plannedCoord) {
+          children.push({
+            type: 'circle',
+            shape: { cx: plannedCoord[0], cy: y, r: 4 },
+            style: { fill: SCHEDULE_SERIES_COLORS.planned, stroke: '#fff', lineWidth: 1.5 }
+          });
+          children.push({
+            type: 'text',
+            style: {
+              x: plannedCoord[0],
+              y: y - 10,
+              text: formatCompactScheduleDate(bar.plannedDate),
+              fill: SCHEDULE_SERIES_COLORS.planned,
+              font: '700 9px "IBM Plex Sans", sans-serif',
+              textAlign: 'center'
+            }
+          });
+        }
+
+        // 实际时间标记
+        if (actualCoord) {
+          children.push({
+            type: 'circle',
+            shape: { cx: actualCoord[0], cy: y, r: 4 },
+            style: { fill: SCHEDULE_SERIES_COLORS.actual, stroke: '#fff', lineWidth: 1.5 }
+          });
+          children.push({
+            type: 'text',
+            style: {
+              x: actualCoord[0],
+              y: y - 10,
+              text: formatCompactScheduleDate(bar.actualDate),
+              fill: SCHEDULE_SERIES_COLORS.actual,
+              font: '700 9px "IBM Plex Sans", sans-serif',
+              textAlign: 'center'
+            }
+          });
+        }
+
+        return { type: 'group', children };
+      },
+      data: milestoneProgressBars,
+      z: 100
+    }
   ];
 
   return {
@@ -506,10 +545,9 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
       show: hasMonthlyHours,
       data: departments,
       type: 'scroll',
-      top: 290,
+      orient: 'horizontal',
+      bottom: 10,
       left: 'center',
-      right: 'auto',
-      bottom: 'auto',
       itemGap: 14,
       textStyle: chartText
     },
@@ -541,7 +579,7 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         `;
       }
     },
-    grid: { left: 110, right: 132, top: 40, bottom: 60 },
+    grid: { left: 110, right: 132, top: 100, bottom: 80 },
     xAxis: {
       type: 'category',
       position: 'top',
