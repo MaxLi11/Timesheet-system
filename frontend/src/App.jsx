@@ -435,13 +435,50 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
     };
   });
 
+  // 构建节点标记线数据
+  const milestoneMarkLines = [];
+  milestones.forEach((milestone) => {
+    const plannedIndex = monthScale.getDateIndex(milestone.planned_date);
+    const actualIndex = monthScale.getDateIndex(milestone.actual_date);
+
+    // 预计时间标记线（蓝色）
+    if (plannedIndex !== null) {
+      milestoneMarkLines.push({
+        name: `${milestone.name} (计划)`,
+        xAxis: plannedIndex,
+        lineStyle: { color: SCHEDULE_SERIES_COLORS.planned, width: 2, type: 'solid' },
+        label: {
+          show: true,
+          position: 'end',
+          formatter: formatCompactScheduleDate(milestone.planned_date),
+          color: SCHEDULE_SERIES_COLORS.planned,
+          fontSize: 10
+        }
+      });
+    }
+
+    // 实际时间标记线（橙色）
+    if (actualIndex !== null) {
+      milestoneMarkLines.push({
+        name: `${milestone.name} (实际)`,
+        xAxis: actualIndex,
+        lineStyle: { color: SCHEDULE_SERIES_COLORS.actual, width: 2, type: 'solid' },
+        label: {
+          show: true,
+          position: 'end',
+          formatter: formatCompactScheduleDate(milestone.actual_date),
+          color: SCHEDULE_SERIES_COLORS.actual,
+          fontSize: 10
+        }
+      });
+    }
+  });
+
   const series = [
     ...departments.map((department, index) => ({
       name: department,
       type: 'bar',
       stack: 'monthly-hours',
-      xAxisIndex: 0,
-      yAxisIndex: 0,
       barMaxWidth: 28,
       itemStyle: {
         color: EDITORIAL_THEME.palette[index % EDITORIAL_THEME.palette.length],
@@ -450,110 +487,16 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
       emphasis: { focus: 'series' },
       data: monthScale.monthLabels.map(label =>
         Number((monthlySeriesMaps.get(department)?.get(label) || 0).toFixed(1))
-      )
-    })),
-    {
-      name: t.milestoneProgress,
-      type: 'custom',
-      xAxisIndex: 1,
-      yAxisIndex: 1,
-      data: milestoneProgressData,
-      renderItem: (params, api) => {
-        const item = milestoneProgressData[params.dataIndex];
-        const rowIndex = api.value(2);
-        const rowCoord = api.coord([monthScale.min, rowIndex]);
-        const plannedCoord = item.hasPlannedDate ? api.coord([api.value(0), rowIndex]) : null;
-        const actualCoord = item.hasActualDate ? api.coord([api.value(1), rowIndex]) : null;
-        const pendingCoord = !item.hasActualDate ? api.coord([api.value(1), rowIndex]) : null;
-        const trackStartX = plannedCoord?.[0] ?? actualCoord?.[0] ?? pendingCoord?.[0] ?? rowCoord[0];
-        const trackEndX = actualCoord?.[0] ?? pendingCoord?.[0] ?? trackStartX;
-        const left = Math.min(trackStartX, trackEndX);
-        const right = Math.max(trackStartX, trackEndX);
-        const trackHeight = Math.max(7, Math.min(12, api.size([0, 1])[1] * 0.26));
-        const trackWidth = Math.max(right - left, item.hasActualDate ? 4 : 16);
-        const y = rowCoord[1] - trackHeight / 2;
-        const lineHeight = Math.max(12, Math.min(22, api.size([0, 1])[1] * 0.64));
-        const lineTop = rowCoord[1] - lineHeight / 2;
-        const lineBottom = rowCoord[1] + lineHeight / 2;
-        const labelText = item.hasActualDate ? item.actualDateLabel : item.pendingLabel;
-        const labelX = (actualCoord?.[0] ?? pendingCoord?.[0] ?? right) + 7;
-
-        return {
-          type: 'group',
-          children: [
-            {
-              type: 'rect',
-              shape: {
-                x: left,
-                y,
-                width: trackWidth,
-                height: trackHeight,
-                r: trackHeight / 2
-              },
-              style: {
-                fill: item.hasActualDate ? 'rgba(140, 156, 184, 0.12)' : 'rgba(255, 139, 75, 0.08)',
-                stroke: item.hasActualDate ? 'rgba(126, 145, 175, 0.26)' : 'rgba(255, 139, 75, 0.34)',
-                lineWidth: 1,
-                lineDash: item.hasActualDate ? undefined : [4, 3]
-              }
-            },
-            ...(plannedCoord ? [{
-              type: 'line',
-              shape: {
-                x1: plannedCoord[0],
-                y1: lineTop,
-                x2: plannedCoord[0],
-                y2: lineBottom
-              },
-              style: {
-                stroke: SCHEDULE_SERIES_COLORS.planned,
-                lineWidth: 2,
-                opacity: 0.92
-              }
-            }] : []),
-            ...(actualCoord ? [{
-              type: 'line',
-              shape: {
-                x1: actualCoord[0],
-                y1: lineTop - 1,
-                x2: actualCoord[0],
-                y2: lineBottom + 1
-              },
-              style: {
-                stroke: SCHEDULE_SERIES_COLORS.actual,
-                lineWidth: 3,
-                shadowBlur: 10,
-                shadowColor: 'rgba(77, 114, 255, 0.22)'
-              }
-            }] : pendingCoord ? [{
-              type: 'line',
-              shape: {
-                x1: pendingCoord[0],
-                y1: lineTop,
-                x2: pendingCoord[0],
-                y2: lineBottom
-              },
-              style: {
-                stroke: SCHEDULE_SERIES_COLORS.pending,
-                lineWidth: 2,
-                lineDash: [4, 3],
-                opacity: 0.92
-              }
-            }] : []),
-            ...(labelText ? [{
-              type: 'text',
-              style: {
-                x: labelX,
-                y: rowCoord[1] - 6,
-                text: labelText,
-                fill: item.hasActualDate ? SCHEDULE_SERIES_COLORS.actual : SCHEDULE_SERIES_COLORS.pending,
-                font: '700 10px "IBM Plex Sans", "Noto Sans SC", sans-serif'
-              }
-            }] : [])
-          ]
-        };
-      }
-    }
+      ),
+      // 只在第一个系列上添加所有节点标记线
+      ...(index === 0 ? {
+        markLine: {
+          silent: false,
+          symbol: 'none',
+          data: milestoneMarkLines
+        }
+      } : {})
+    }))
   ];
 
   return {
@@ -598,62 +541,29 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         `;
       }
     },
-    grid: [
-      { left: 110, right: 132, top: 40, height: 300 },
-      { left: 110, right: 132, top: 366, height: 240 }
-    ],
-    xAxis: [
-      {
-        gridIndex: 0,
-        type: 'category',
-        position: 'top',
-        data: monthScale.monthLabels,
-        axisLabel: {
-          ...chartAxis,
-          fontSize: 10.5,
-          formatter: (value) => formatScheduleMonthLabel(value)
-        },
-        axisTick: { show: false },
-        axisLine: { lineStyle: { color: EDITORIAL_THEME.border } },
-        splitLine: chartSplitLine
+    grid: { left: 110, right: 132, top: 40, bottom: 60 },
+    xAxis: {
+      type: 'category',
+      position: 'top',
+      data: monthScale.monthLabels,
+      axisLabel: {
+        ...chartAxis,
+        fontSize: 10.5,
+        formatter: (value) => formatScheduleMonthLabel(value)
       },
-      {
-        gridIndex: 1,
-        type: 'category',
-        data: monthScale.monthLabels,
-        axisLabel: { show: false },
-        axisTick: { show: false },
-        axisLine: { show: false },
-        splitLine: { show: false }
-      }
-    ],
-    yAxis: [
-      {
-        gridIndex: 0,
-        type: 'value',
-        min: 0,
-        axisLabel: {
-          ...chartAxis,
-          formatter: value => `${value}h`
-        },
-        splitLine: chartSplitLine
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: EDITORIAL_THEME.border } },
+      splitLine: chartSplitLine
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      axisLabel: {
+        ...chartAxis,
+        formatter: value => `${value}h`
       },
-      {
-        gridIndex: 1,
-        type: 'category',
-        position: 'right',
-        data: milestones.map(milestone => milestone.name),
-        inverse: true,
-        axisLabel: {
-          ...chartAxis,
-          fontSize: 9,
-          width: 92,
-          overflow: 'truncate'
-        },
-        axisTick: { show: false },
-        axisLine: { show: false }
-      }
-    ],
+      splitLine: chartSplitLine
+    },
     series,
     graphic: [
       {
