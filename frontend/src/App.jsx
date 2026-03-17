@@ -367,16 +367,14 @@ const buildScheduleMonthScale = (dateValues) => {
 
   return {
     monthLabels: monthStarts.map(monthStart => monthStart.format('YYYY-MM')),
-    min: -0.5,
-    max: Math.max(monthStarts.length - 0.5, 0.5),
-    toAxisValue: (value) => {
+    getDateIndex: (value) => {
       if (!value) return null;
       const date = dayjs(value);
       if (!date.isValid()) return null;
       const monthIndex = monthIndexMap.get(date.format('YYYY-MM'));
       if (monthIndex === undefined) return null;
-      const dayFraction = (date.date() - 0.5) / date.daysInMonth();
-      return monthIndex - 0.5 + Math.min(Math.max(dayFraction, 0), 1);
+      const dayFraction = (date.date() - 1) / date.daysInMonth();
+      return monthIndex + dayFraction;
     }
   };
 };
@@ -421,10 +419,10 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
     ])
   );
   const milestoneProgressData = milestones.map((milestone, index) => {
-    const plannedValue = monthScale.toAxisValue(milestone.planned_date);
-    const actualValue = monthScale.toAxisValue(milestone.actual_date);
-    const anchorValue = plannedValue ?? actualValue ?? Math.max(monthScale.min + 0.16, monthScale.max - 0.16);
-    const pendingValue = actualValue ?? Math.min(monthScale.max - 0.08, anchorValue + 0.18);
+    const plannedValue = monthScale.getDateIndex(milestone.planned_date);
+    const actualValue = monthScale.getDateIndex(milestone.actual_date);
+    const anchorValue = plannedValue ?? actualValue ?? 0;
+    const pendingValue = actualValue ?? Math.min(monthScale.monthLabels.length - 1, anchorValue + 0.5);
 
     return {
       value: [plannedValue ?? anchorValue, actualValue ?? pendingValue, index],
@@ -450,14 +448,9 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         borderRadius: [8, 8, 0, 0]
       },
       emphasis: { focus: 'series' },
-      data: monthScale.monthLabels.map((label, idx) => {
-        const midMonthDate = `${label}-15`;
-        const xCoord = monthScale.toAxisValue(midMonthDate);
-        return [
-          xCoord !== null ? xCoord : idx,
-          Number((monthlySeriesMaps.get(department)?.get(label) || 0).toFixed(1))
-        ];
-      })
+      data: monthScale.monthLabels.map(label =>
+        Number((monthlySeriesMaps.get(department)?.get(label) || 0).toFixed(1))
+      )
     })),
     {
       name: t.milestoneProgress,
@@ -606,29 +599,19 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
       }
     },
     grid: [
-      { left: 110, right: 132, top: 40, height: 260 },
-      { left: 110, right: 132, top: 326, height: 240 }
+      { left: 110, right: 132, top: 40, height: 300 },
+      { left: 110, right: 132, top: 366, height: 240 }
     ],
     xAxis: [
       {
         gridIndex: 0,
-        type: 'value',
+        type: 'category',
         position: 'top',
-        min: monthScale.min,
-        max: monthScale.max,
-        splitNumber: monthScale.monthLabels.length,
+        data: monthScale.monthLabels,
         axisLabel: {
           ...chartAxis,
           fontSize: 10.5,
-          formatter: (value) => {
-            const index = Math.round(value);
-            if (index >= 0 && index < monthScale.monthLabels.length) {
-              return formatScheduleMonthLabel(monthScale.monthLabels[index]);
-            }
-            return '';
-          },
-          showMinLabel: false,
-          showMaxLabel: false
+          formatter: (value) => formatScheduleMonthLabel(value)
         },
         axisTick: { show: false },
         axisLine: { lineStyle: { color: EDITORIAL_THEME.border } },
@@ -636,10 +619,8 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
       },
       {
         gridIndex: 1,
-        type: 'value',
-        min: monthScale.min,
-        max: monthScale.max,
-        interval: 1,
+        type: 'category',
+        data: monthScale.monthLabels,
         axisLabel: { show: false },
         axisTick: { show: false },
         axisLine: { show: false },
