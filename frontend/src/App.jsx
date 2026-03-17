@@ -450,10 +450,14 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         borderRadius: [8, 8, 0, 0]
       },
       emphasis: { focus: 'series' },
-      data: monthScale.monthLabels.map((label, idx) => [
-        idx,
-        Number((monthlySeriesMaps.get(department)?.get(label) || 0).toFixed(1))
-      ])
+      data: monthScale.monthLabels.map((label, idx) => {
+        const midMonthDate = `${label}-15`;
+        const xCoord = monthScale.toAxisValue(midMonthDate);
+        return [
+          xCoord !== null ? xCoord : idx,
+          Number((monthlySeriesMaps.get(department)?.get(label) || 0).toFixed(1))
+        ];
+      })
     })),
     {
       name: t.milestoneProgress,
@@ -566,7 +570,7 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
       show: hasMonthlyHours,
       data: departments,
       type: 'scroll',
-      top: 206,
+      top: 290,
       left: 'center',
       right: 'auto',
       bottom: 'auto',
@@ -602,8 +606,8 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
       }
     },
     grid: [
-      { left: 110, right: 132, top: 40, height: 176 },
-      { left: 110, right: 132, top: 242, height: 240 }
+      { left: 110, right: 132, top: 40, height: 260 },
+      { left: 110, right: 132, top: 326, height: 240 }
     ],
     xAxis: [
       {
