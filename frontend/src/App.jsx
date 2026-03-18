@@ -487,7 +487,8 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
           children.push({
             type: 'rect',
             shape: { x: startX, y: yCoord - barHeight / 2, width: endX - startX, height: barHeight, r: barHeight / 2 },
-            style: { fill: 'rgba(140, 156, 184, 0.15)', stroke: 'rgba(126, 145, 175, 0.3)', lineWidth: 1 }
+            style: { fill: 'rgba(140, 156, 184, 0.15)', stroke: 'rgba(126, 145, 175, 0.3)', lineWidth: 1 },
+            blur: { style: { opacity: 1 } }
           });
         }
 
@@ -496,7 +497,8 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
           children.push({
             type: 'circle',
             shape: { cx: plannedCoord[0], cy: yCoord, r: 4 },
-            style: { fill: SCHEDULE_SERIES_COLORS.planned, stroke: '#fff', lineWidth: 1.5 }
+            style: { fill: SCHEDULE_SERIES_COLORS.planned, stroke: '#fff', lineWidth: 1.5 },
+            blur: { style: { opacity: 1 } }
           });
           children.push({
             type: 'text',
@@ -507,7 +509,8 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
               fill: SCHEDULE_SERIES_COLORS.planned,
               font: '700 9px "IBM Plex Sans", sans-serif',
               textAlign: 'center'
-            }
+            },
+            blur: { style: { opacity: 1 } }
           });
         }
 
@@ -516,7 +519,8 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
           children.push({
             type: 'circle',
             shape: { cx: actualCoord[0], cy: yCoord, r: 4 },
-            style: { fill: SCHEDULE_SERIES_COLORS.actual, stroke: '#fff', lineWidth: 1.5 }
+            style: { fill: SCHEDULE_SERIES_COLORS.actual, stroke: '#fff', lineWidth: 1.5 },
+            blur: { style: { opacity: 1 } }
           });
           children.push({
             type: 'text',
@@ -527,7 +531,8 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
               fill: SCHEDULE_SERIES_COLORS.actual,
               font: '700 9px "IBM Plex Sans", sans-serif',
               textAlign: 'center'
-            }
+            },
+            blur: { style: { opacity: 1 } }
           });
         }
 
@@ -607,6 +612,7 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         type: 'category',
         position: 'right',
         data: milestones.map(m => m.name),
+        inverse: true,
         axisLabel: {
           ...chartAxis,
           fontSize: 9
@@ -753,7 +759,7 @@ const App = () => {
       allApprovers: 'All Approvers', selectAll: 'All', clearAll: 'Clear',
       rankingTitle: 'Project Hours Ranking', avgMonthlyHours: 'Avg. Monthly Hours',
       projectAnalysis: 'Project Analysis', deptContribution: 'Dept. Contribution',
-      selectProjects: 'Select Projects',
+      selectProjects: 'Select Projects (multi-select)',
       legacyContributionTitle: 'Legacy Dept. Contribution',
       legacyContributionSubtitle: 'Keep the original contribution chart available as a collapsed reference.',
       scheduleMonitorTitle: 'Project Schedule Monitor',
