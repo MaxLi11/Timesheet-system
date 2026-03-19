@@ -1666,34 +1666,42 @@ const App = () => {
 
       <main className="main-content">
         <header className={`page-hero ${activeTab === 'overview' ? 'page-hero-overview' : ''}`} style={activeTab === 'custom_data' ? { gridTemplateColumns: '1fr' } : {}}>
-          <div className="page-intro-copy" style={activeTab === 'custom_data' ? { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' } : {}}>
-            <div style={{ minWidth: 0 }}>
-              <p className="page-eyebrow">{pageMeta.eyebrow}</p>
-              <h1 className="page-title">{pageMeta.title}</h1>
-              <p className="page-summary">{pageMeta.description}</p>
-
-              {activeTab === 'overview' && (
-                <div className="hero-meta-row">
-                  <span className="hero-meta-pill">
-                    <span>{uiText.liveSync}</span>
-                    <strong>{statusLabel}</strong>
-                  </span>
-                  <span className="hero-meta-pill">
-                    <span>{uiText.activeFilters}</span>
-                    <strong>{activeFilterCount}</strong>
-                  </span>
-                  <span className="hero-meta-pill">
-                    <span>{uiText.topDept}</span>
-                    <strong>{topDepartment}</strong>
-                  </span>
+          <div className="page-intro-copy">
+            {activeTab === 'custom_data' ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', width: '100%' }}>
+                <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+                  <p className="page-eyebrow">{pageMeta.eyebrow}</p>
+                  <h1 className="page-title">{pageMeta.title}</h1>
+                  <p className="page-summary">{pageMeta.description}</p>
                 </div>
-              )}
-            </div>
-            {activeTab === 'custom_data' && (
-              <label className="export-btn" style={{ ...secondaryActionButtonStyle, cursor: 'pointer', margin: 0, flexShrink: 0 }}>
-                <FileDown size={16} /> {t.uploadWorkWeek}
-                <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
-              </label>
+                <label className="export-btn" style={{ ...secondaryActionButtonStyle, cursor: 'pointer', margin: 0, flex: '0 0 auto' }}>
+                  <FileDown size={16} /> {t.uploadWorkWeek}
+                  <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
+                </label>
+              </div>
+            ) : (
+              <>
+                <p className="page-eyebrow">{pageMeta.eyebrow}</p>
+                <h1 className="page-title">{pageMeta.title}</h1>
+                <p className="page-summary">{pageMeta.description}</p>
+
+                {activeTab === 'overview' && (
+                  <div className="hero-meta-row">
+                    <span className="hero-meta-pill">
+                      <span>{uiText.liveSync}</span>
+                      <strong>{statusLabel}</strong>
+                    </span>
+                    <span className="hero-meta-pill">
+                      <span>{uiText.activeFilters}</span>
+                      <strong>{activeFilterCount}</strong>
+                    </span>
+                    <span className="hero-meta-pill">
+                      <span>{uiText.topDept}</span>
+                      <strong>{topDepartment}</strong>
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
