@@ -1668,7 +1668,7 @@ const App = () => {
 
       <main className="main-content">
         <header className={`page-hero ${activeTab === 'overview' ? 'page-hero-overview' : ''}`} style={activeTab === 'custom_data' || activeTab === 'project_analysis' ? { gridTemplateColumns: '1fr' } : {}}>
-          <div className="page-intro-copy">
+          <div className="page-intro-copy" style={activeTab === 'project_analysis' ? { overflow: 'visible', zIndex: 10 } : undefined}>
             {activeTab === 'custom_data' ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', width: '100%' }}>
                 <div style={{ minWidth: 0, flex: '1 1 auto' }}>
@@ -1680,7 +1680,7 @@ const App = () => {
                 </label>
               </div>
             ) : activeTab === 'project_analysis' ? (
-              <div className="project-schedule-actions" style={{ width: '100%', justifyContent: 'flex-start', alignItems: 'flex-end' }}>
+              <div className="project-schedule-actions" style={{ width: '100%', justifyContent: 'flex-start', alignItems: 'flex-end', position: 'relative', zIndex: 10 }}>
                 <label className="utility-upload schedule-upload-control" style={{ margin: 0 }}>
                   <Upload size={18} />
                   <span>{t.uploadProjectSchedule}</span>
