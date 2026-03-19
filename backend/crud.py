@@ -6,29 +6,34 @@ from . import database
 
 def save_time_entries(db: Session, entries: list):
     """
-    Saves a list of time entry dictionaries to the database using rolling updates.
-    Optimized for large data volumes using bulk inserts.
+    Saves a list of time entry dictionaries to the database using upsert logic.
+    For each entry, delete the matching record by (employee_id, project_name, category,
+    start_date, end_date) before inserting, so that:
+    - Re-uploading the same file updates existing records
+    - Uploading a different file for the same period does NOT delete unrelated records
     """
     if not entries:
         return 0
 
-    # 1. Identify unique periods in the incoming entries
-    periods = set((e['start_date'], e['end_date']) for e in entries)
-    
-    # 2. Clear old data for these specific periods
-    for start, end in periods:
-        db.query(database.TimeEntry).filter(
-            database.TimeEntry.start_date == start,
-            database.TimeEntry.end_date == end
-        ).delete(synchronize_session=False)
-    
-    # 3. Bulk insert all new entries in chunks
-    # bulk_insert_mappings is significantly faster, but chunking prevents memory issues
+    for e in entries:
+        q = db.query(database.TimeEntry).filter(
+            database.TimeEntry.start_date == e['start_date'],
+            database.TimeEntry.end_date == e['end_date'],
+            database.TimeEntry.project_name == e['project_name'],
+            database.TimeEntry.category == e['category'],
+        )
+        eid = (e.get('employee_id') or '').strip()
+        if eid:
+            q = q.filter(database.TimeEntry.employee_id == eid)
+        else:
+            q = q.filter(database.TimeEntry.employee_name == e['employee_name'])
+        q.delete(synchronize_session=False)
+
     CHUNK_SIZE = 5000
     for i in range(0, len(entries), CHUNK_SIZE):
         chunk = entries[i : i + CHUNK_SIZE]
         db.bulk_insert_mappings(database.TimeEntry, chunk)
-    
+
     db.commit()
     return len(entries)
 
