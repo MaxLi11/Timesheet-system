@@ -463,6 +463,10 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
 };
 
 // ── 项目节点区间工时堆积图 ────────────────────────────────────────────────────
+// 设计：Y 轴采用"节点行 / 区间行"交错布局
+//   奇数行（0, 2, 4…）= 节点标签行，barGap 为 0，柱子高度 0（占位）
+//   偶数行（1, 3, 5…）= 区间工时行，实际画堆积柱
+// 这样每根堆积柱恰好出现在上方节点和下方节点的中间位置。
 const buildMilestoneIntervalChartOption = (project, lang, t) => {
   const milestones = project?.milestones || [];
   const intervals  = project?.intervals  || [];
@@ -478,36 +482,80 @@ const buildMilestoneIntervalChartOption = (project, lang, t) => {
     .sort((a, b) => b[1] - a[1])
     .map(e => e[0]);
 
-  // to_milestone → interval 索引
-  const ivByTarget = new Map(intervals.map(iv => [iv.to_milestone, iv]));
+  // from_milestone → interval 索引（柱子属于"起始节点 → 终止节点"之间）
+  const ivByFrom = new Map(intervals.map(iv => [iv.from_milestone, iv]));
 
   const hasAnyHours = intervals.some(iv => (iv.total_hours || 0) > 0);
 
-  // Y 轴标签：节点名 | 实际日期（用 | 分割给 rich formatter 解析）
-  const yLabels = milestones.map(m => {
+  // ── 构建交错 Y 轴行 ──────────────────────────────────────────────────────
+  // 每个节点贡献 1 行标签行，节点与节点之间贡献 1 行区间行
+  // 最后一个节点后面没有区间行
+  // 行顺序（inverse:true → 第0行在最上面）：
+  //   [ms0_label, ms0→ms1_interval, ms1_label, ms1→ms2_interval, …, msN_label]
+  const yRows = [];           // Y 轴 category 字符串
+  const intervalIndexByRow = new Map(); // rowIndex → interval object
+
+  milestones.forEach((m, mi) => {
     const dateStr = m.actual_date
       ? dayjs(m.actual_date).format('YYYY/MM/DD')
       : (lang === 'zh' ? '待完成' : 'Pending');
-    return `${m.name}|${dateStr}`;
+    // 节点标签行：用特殊前缀 'MS|' 标记，供 axisLabel formatter 识别
+    yRows.push(`MS|${m.name}|${dateStr}`);
+
+    // 如果不是最后一个节点，在其后插入一行区间行
+    if (mi < milestones.length - 1) {
+      const iv = ivByFrom.get(m.name);
+      const rowIdx = yRows.length; // 即将插入的行索引
+      yRows.push(`IV|${m.name}`);  // 区间行，内容不在 y轴上显示
+      if (iv) intervalIndexByRow.set(rowIdx, iv);
+    }
   });
 
+  // ── 构建 series ──────────────────────────────────────────────────────────
   const series = departments.map((dept, idx) => ({
     name: dept,
     type: 'bar',
     stack: 'ms-hours',
-    barMaxWidth: 24,
+    barMaxWidth: 28,
+    barMinHeight: 1,
     itemStyle: {
       color: EDITORIAL_THEME.palette[idx % EDITORIAL_THEME.palette.length],
       borderRadius: [0, 4, 4, 0]
     },
     emphasis: { focus: 'series' },
-    data: milestones.map(m => {
-      const iv = ivByTarget.get(m.name);
+    // 节点标签行给 0，区间行给实际工时
+    data: yRows.map((row, rowIdx) => {
+      if (row.startsWith('MS|')) return 0;
+      const iv = intervalIndexByRow.get(rowIdx);
       if (!iv) return 0;
       const share = (iv.department_shares || []).find(d => d.department === dept);
       return share ? Number(share.hours.toFixed(1)) : 0;
     })
   }));
+
+  // ── tooltip：只在区间行触发有意义的内容 ─────────────────────────────────
+  const tooltipFormatter = (params) => {
+    if (!Array.isArray(params) || !params.length) return '';
+    const rowIdx = params[0].dataIndex;
+    const rowLabel = yRows[rowIdx] || '';
+    if (rowLabel.startsWith('MS|')) return ''; // 节点行不弹
+    const iv = intervalIndexByRow.get(rowIdx);
+    if (!iv) return '';
+    const total = iv.total_hours || 0;
+    let html = `<div style="font-weight:800;margin-bottom:4px;">${iv.from_milestone} → ${iv.to_milestone}</div>`;
+    params.filter(p => Number(p.value) > 0).forEach(p => {
+      html += `<div style="display:flex;justify-content:space-between;gap:14px;"><span>${p.marker} ${p.seriesName}</span><strong>${formatScheduleNumber(p.value)}h</strong></div>`;
+    });
+    if (total > 0) {
+      html += `<div style="border-top:1px solid #eee;margin-top:4px;padding-top:4px;display:flex;justify-content:space-between;gap:14px;"><span>${lang === 'zh' ? '区间合计' : 'Interval Total'}</span><strong>${formatScheduleNumber(total)}h</strong></div>`;
+    } else {
+      html += `<div style="color:#9aabc6;font-size:11px;margin-top:4px;">${lang === 'zh' ? '暂无 Close 工时' : 'No Close hours'}</div>`;
+    }
+    return html;
+  };
+
+  // 每个节点行行高约 38px，每个区间行行高约 36px
+  const rowCount = yRows.length;
 
   return {
     color: EDITORIAL_THEME.palette,
@@ -525,29 +573,9 @@ const buildMilestoneIntervalChartOption = (project, lang, t) => {
       ...tooltipBase,
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      formatter: (params) => {
-        if (!Array.isArray(params) || !params.length) return '';
-        const idx = params[0].dataIndex;
-        const milestone = milestones[idx];
-        const iv = ivByTarget.get(milestone?.name);
-        const total = iv?.total_hours || 0;
-        const dateStr = milestone?.actual_date
-          ? dayjs(milestone.actual_date).format('YYYY-MM-DD')
-          : (lang === 'zh' ? '待完成' : 'Pending');
-        let html = `<div style="font-weight:800;margin-bottom:4px;">${milestone?.name || ''}</div>`;
-        html += `<div style="font-size:11px;color:#8a9bba;margin-bottom:6px;">${dateStr}</div>`;
-        params.filter(p => Number(p.value) > 0).forEach(p => {
-          html += `<div style="display:flex;justify-content:space-between;gap:14px;"><span>${p.marker} ${p.seriesName}</span><strong>${formatScheduleNumber(p.value)}h</strong></div>`;
-        });
-        if (total > 0) {
-          html += `<div style="border-top:1px solid #eee;margin-top:4px;padding-top:4px;display:flex;justify-content:space-between;gap:14px;"><span>${lang === 'zh' ? '区间合计' : 'Interval Total'}</span><strong>${formatScheduleNumber(total)}h</strong></div>`;
-        } else {
-          html += `<div style="color:#9aabc6;font-size:11px;margin-top:4px;">${lang === 'zh' ? '暂无 Close 工时' : 'No Close hours'}</div>`;
-        }
-        return html;
-      }
+      formatter: tooltipFormatter
     },
-    grid: { left: 172, right: 24, top: 16, bottom: 54 },
+    grid: { left: 176, right: 24, top: 16, bottom: 54 },
     xAxis: {
       type: 'value',
       axisLabel: { ...chartAxis, formatter: v => `${v}h` },
@@ -555,16 +583,19 @@ const buildMilestoneIntervalChartOption = (project, lang, t) => {
     },
     yAxis: {
       type: 'category',
-      data: yLabels,
+      data: yRows,
       inverse: true,
+      // 让节点行和区间行等高，barCategoryGap 设 0 使柱子撑满区间行
+      barCategoryGap: '20%',
       axisLabel: {
         ...chartAxis,
         fontSize: 11,
-        width: 162,
+        width: 166,
         overflow: 'truncate',
-        lineHeight: 15,
+        interval: 0,
         formatter: (value) => {
-          const [name, date] = value.split('|');
+          if (!value.startsWith('MS|')) return ''; // 区间行不显示标签
+          const [, name, date] = value.split('|');
           return `{nm|${name}}\n{dt|${date}}`;
         },
         rich: {
@@ -573,7 +604,12 @@ const buildMilestoneIntervalChartOption = (project, lang, t) => {
         }
       },
       axisTick: { show: false },
-      axisLine: { show: false }
+      axisLine: { show: false },
+      splitLine: {
+        show: true,
+        // 只在节点行画虚线，区间行不画
+        lineStyle: { color: 'rgba(115,138,176,0.10)', type: 'dashed' }
+      }
     },
     series,
     graphic: hasAnyHours ? [] : [{
@@ -1891,8 +1927,9 @@ const App = () => {
                           ? scheduleChartOptions.get(project.project_name)
                           : milestoneChartOptions.get(project.project_name)}
                         style={{
+                          // milestone 模式：行数 = 节点数 * 2 - 1（交错行），每行约 38px
                           height: scheduleChartMode === 'milestone'
-                            ? `${Math.max(320, (project.milestones || []).length * 52 + 80)}px`
+                            ? `${Math.max(340, (project.milestones || []).length * 2 * 38 + 80)}px`
                             : '360px'
                         }}
                         notMerge={true}
