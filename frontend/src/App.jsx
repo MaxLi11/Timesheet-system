@@ -1441,7 +1441,9 @@ const App = () => {
   };
 
   const trendChartOpt = useMemo(() => {
-    const agg = dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity);
+    // 过滤掉 timesheet 表里的“非项目名称”工时，不在此走势图中展示
+    const trendData = filteredData.filter(item => item.project_name !== '非项目名称');
+    const agg = dataHelper.aggregateProjectData(trendData, effectiveDashGranularity);
     // The structure of `agg` from dataHelper.aggregateProjectData is expected to be:
     // { projects: [...], labels: [...], series: [...] }
     // The instruction provided `const projNames = Object.keys(agg); const periods = Array.from(new Set(projNames.flatMap(p => Object.keys(agg[p])))).sort();`
