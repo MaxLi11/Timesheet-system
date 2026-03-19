@@ -1243,6 +1243,31 @@ input[type='checkbox']:checked::after {
   text-align: center;
 }
 
+.custom-data-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.96rem;
+}
+
+.custom-data-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.68rem;
+}
+
+.custom-data-note {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.95rem 1rem;
+  border-radius: 22px;
+  background: rgba(241, 246, 255, 0.82);
+  border: 1px solid rgba(115, 138, 176, 0.14);
+}
+
+.custom-data-note p {
+  margin: 0;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -1315,6 +1340,10 @@ input[type='checkbox']:checked::after {
 
   .project-meta-pills {
     justify-content: flex-start;
+  }
+
+  .custom-data-summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 

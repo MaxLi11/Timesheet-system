@@ -16,6 +16,7 @@ import isoWeek from 'dayjs/plugin/isoWeek';
 dayjs.extend(isoWeek);
 import * as XLSX from 'xlsx';
 import * as dataHelper from './utils/dataHelper';
+import { buildCustomProjectHoursExport } from './utils/customDataExport';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '/api');
 const EDITORIAL_THEME = {
@@ -798,6 +799,21 @@ const App = () => {
   t.scheduleHoursEmpty = lang === 'zh'
     ? '当前项目暂时没有 Close 工时'
     : 'No Close hours are available for the current project yet.';
+  t.customDataNav = lang === 'zh' ? '定制化数据' : 'Custom Data';
+  t.customDataTitle = lang === 'zh' ? '定制化数据导出' : 'Custom Data Export';
+  t.customDataSubtitle = lang === 'zh'
+    ? '按 Project + Close 口径导出每项目工时宽表。'
+    : 'Export a wide monthly workbook using the Project + Close scope.';
+  t.exportCustomData = lang === 'zh' ? '导出每项目工时' : 'Export Project Hours';
+  t.customDataScope = lang === 'zh'
+    ? '默认导出全部项目，不做筛选，月份会按最早到最晚连续展开。'
+    : 'Exports all projects by default with continuous month columns from earliest to latest.';
+  t.customDataReuploadHint = lang === 'zh'
+    ? '若历史工时尚未按新解析逻辑重传，“所属部门/职位” 可能为空。'
+    : 'If historical timesheets have not been re-uploaded, full department and position may still be empty.';
+  t.customDataProjects = lang === 'zh' ? '项目数' : 'Projects';
+  t.customDataEmployees = lang === 'zh' ? '员工行数' : 'Employee Rows';
+  t.customDataMonths = lang === 'zh' ? '月份列数' : 'Month Columns';
 
   const uiText = {
     zh: {
@@ -838,6 +854,11 @@ const App = () => {
         title: t.scheduleMonitorTitle,
         description: t.scheduleMonitorSubtitle
       },
+      custom_data: {
+        eyebrow: t.customDataNav,
+        title: t.customDataTitle,
+        description: t.customDataSubtitle
+      },
       reporting: {
         eyebrow: t.reporting,
         title: t.reportingTitle,
@@ -855,6 +876,9 @@ const App = () => {
     t.approval,
     t.approvalSubtitle,
     t.approvalTitle,
+    t.customDataNav,
+    t.customDataSubtitle,
+    t.customDataTitle,
     t.dashboard,
     t.deptContribution,
     t.projectAnalysis,
@@ -871,9 +895,10 @@ const App = () => {
   const navItems = useMemo(() => ([
     { id: 'overview', label: t.dashboard, icon: LayoutDashboard },
     { id: 'project_analysis', label: t.projectAnalysis, icon: BarChart3 },
+    { id: 'custom_data', label: t.customDataNav, icon: Calendar },
     { id: 'reporting', label: t.reporting, icon: ClipboardCheck },
     { id: 'approval', label: t.approval, icon: CheckCircle2 }
-  ]), [t.approval, t.dashboard, t.projectAnalysis, t.reporting]);
+  ]), [t.approval, t.customDataNav, t.dashboard, t.projectAnalysis, t.reporting]);
 
   const statusLabel = status === 'connected' ? t.connected : status === 'error' ? t.disconnected : t.checking;
 
@@ -1133,6 +1158,14 @@ const App = () => {
     XLSX.writeFile(wb, `完整填报率_${periodLabel}_target${targetHours}h.xlsx`);
   };
 
+  const exportCustomProjectHoursExcel = () => {
+    const workbookData = buildCustomProjectHoursExport(data);
+    const ws = XLSX.utils.aoa_to_sheet([workbookData.headers, ...workbookData.rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, workbookData.sheetName);
+    XLSX.writeFile(wb, workbookData.filename);
+  };
+
   const dashPeriodOptions = useMemo(() => dataHelper.getReportingPeriodOptions(data), [data]);
 
   const filteredData = useMemo(() => {
@@ -1242,6 +1275,11 @@ const App = () => {
   const reportingDeptCount = Object.keys(reportingByDept).length;
   const approvalPendingCount = useMemo(() => approvalRecords.reduce((sum, row) => sum + row.count, 0), [approvalRecords]);
   const approvalPendingHours = useMemo(() => approvalRecords.reduce((sum, row) => sum + row.total_hours, 0), [approvalRecords]);
+  const customDataPreview = useMemo(() => buildCustomProjectHoursExport(data), [data]);
+  const customDataHasMissingMeta = useMemo(
+    () => data.some(entry => entry.category === 'Project' && (!entry.department_full || !entry.position)),
+    [data]
+  );
 
   const pageHighlights = useMemo(() => {
     if (activeTab === 'overview' || activeTab === 'project_analysis') {
@@ -1260,6 +1298,14 @@ const App = () => {
       ];
     }
 
+    if (activeTab === 'custom_data') {
+      return [
+        { label: t.customDataProjects, value: customDataPreview.projectCount },
+        { label: t.customDataEmployees, value: customDataPreview.employeeCount },
+        { label: t.customDataMonths, value: customDataPreview.monthCount }
+      ];
+    }
+
     return [
       { label: t.pendingCount, value: approvalPendingCount },
       { label: t.pendingHours, value: `${approvalPendingHours.toFixed(1)}h` },
@@ -1268,6 +1314,9 @@ const App = () => {
   }, [
     activeTab,
     approvalMonth,
+    customDataPreview.employeeCount,
+    customDataPreview.monthCount,
+    customDataPreview.projectCount,
     approvalPendingCount,
     approvalPendingHours,
     approvalYear,
@@ -1278,6 +1327,9 @@ const App = () => {
     filterYear,
     overviewTimeframeLabel,
     reportingDeptCount,
+    t.customDataEmployees,
+    t.customDataMonths,
+    t.customDataProjects,
     t.pendingCount,
     t.pendingHours,
     t.targetHours,
@@ -1813,6 +1865,44 @@ const App = () => {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'custom_data' && (
+          <div className="section-shell">
+            <div className="card custom-data-card elevated-module">
+              <div className="card-heading-row">
+                <div>
+                  <h3>{t.customDataTitle}</h3>
+                  <p className="module-caption">{t.customDataSubtitle}</p>
+                </div>
+                <button type="button" className="export-btn" onClick={exportCustomProjectHoursExcel}>
+                  <FileDown size={16} /> {t.exportCustomData}
+                </button>
+              </div>
+
+              <div className="custom-data-summary-grid">
+                <div className="hero-panel-stat">
+                  <span>{t.customDataProjects}</span>
+                  <strong>{customDataPreview.projectCount}</strong>
+                </div>
+                <div className="hero-panel-stat">
+                  <span>{t.customDataEmployees}</span>
+                  <strong>{customDataPreview.employeeCount}</strong>
+                </div>
+                <div className="hero-panel-stat">
+                  <span>{t.customDataMonths}</span>
+                  <strong>{customDataPreview.monthCount}</strong>
+                </div>
+              </div>
+
+              <div className="custom-data-note">
+                <p>{t.customDataScope}</p>
+                <p className="module-caption">
+                  {customDataHasMissingMeta ? t.customDataReuploadHint : t.customDataSubtitle}
+                </p>
+              </div>
             </div>
           </div>
         )}

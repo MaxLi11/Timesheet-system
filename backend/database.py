@@ -1,27 +1,25 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, Date, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
 import os
 
-# Get database URL from environment variable, default to local SQLite
+from sqlalchemy import Column, Date, Float, ForeignKey, Integer, String, create_engine, inspect, text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
+
+
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
 if SQLALCHEMY_DATABASE_URL:
-    # Fix for SQLAlchemy 1.4+ which requires 'postgresql://' instead of 'postgres://'
     if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
         SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    
-    # Cloud PostgreSQL settings
     engine = create_engine(SQLALCHEMY_DATABASE_URL)
 else:
-    # Local SQLite settings
-    DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "timesheet.db")
-    SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
+    db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "timesheet.db")
+    SQLALCHEMY_DATABASE_URL = f"sqlite:///{db_path}"
     engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
 
 class Employee(Base):
     __tablename__ = "employees"
@@ -33,6 +31,7 @@ class Employee(Base):
     company = Column(String)
     position = Column(String)
 
+
 class TimeEntry(Base):
     __tablename__ = "time_entries"
 
@@ -40,15 +39,18 @@ class TimeEntry(Base):
     employee_name = Column(String, index=True)
     employee_id = Column(String, index=True)
     department = Column(String, index=True)
+    department_full = Column(String)
+    position = Column(String)
     project_name = Column(String, index=True)
-    category = Column(String) # Project vs Non-Project (Leave, etc)
+    category = Column(String)
     start_date = Column(Date)
     end_date = Column(Date)
     hours = Column(Float)
     task_details = Column(String)
     approval_status = Column(String)
-    current_node = Column(String)    # T col: 当前节点 (e.g. 'Get Approval', 'PL Review', 'Close')
-    pending_approver = Column(String) # U col: 未操作者
+    current_node = Column(String)
+    pending_approver = Column(String)
+
 
 class ProjectSchedule(Base):
     __tablename__ = "project_schedules"
@@ -86,3 +88,24 @@ class ProjectScheduleMilestone(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _backfill_time_entry_columns()
+
+
+def _backfill_time_entry_columns():
+    inspector = inspect(engine)
+    if "time_entries" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("time_entries")}
+    required_columns = {
+        "department_full": "VARCHAR",
+        "position": "VARCHAR",
+    }
+
+    with engine.begin() as connection:
+        for column_name, column_type in required_columns.items():
+            if column_name in existing_columns:
+                continue
+            connection.execute(
+                text(f"ALTER TABLE time_entries ADD COLUMN {column_name} {column_type}")
+            )
