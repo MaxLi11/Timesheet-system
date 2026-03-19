@@ -383,183 +383,26 @@ const buildScheduleMonthScale = (dateValues) => {
 };
 
 const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []) => {
-  const milestones = project?.milestones || [];
   const mappedProjects = project?.mapped_timesheet_projects || [];
   const scheduleProjectEntries = timesheetEntries.filter(entry => mappedProjects.includes(entry.project_name));
   const monthlyHours = dataHelper.aggregateProjectDeptData(scheduleProjectEntries, 'monthly');
-  const monthScale = buildScheduleMonthScale([
-    ...milestones.flatMap(milestone => [milestone.planned_date, milestone.actual_date]),
-    ...monthlyHours.labels.map(label => `${label}-01`)
-  ]);
   const hasMonthlyHours = monthlyHours.series.some(series =>
     series.data.some(value => Number(value || 0) > 0)
   );
-  const monthlySeriesMaps = new Map(
-    monthlyHours.series.map(series => [
-      series.name,
-      new Map(monthlyHours.labels.map((label, index) => [label, Number(series.data[index] || 0)]))
-    ])
-  );
-  const departmentTotals = new Map(
-    monthlyHours.departments.map(department => [
-      department,
-      monthScale.monthLabels.reduce(
-        (sum, label) => sum + Number(monthlySeriesMaps.get(department)?.get(label) || 0),
-        0
-      )
-    ])
-  );
-  const departments = [...monthlyHours.departments].sort(
-    (a, b) => (departmentTotals.get(b) || 0) - (departmentTotals.get(a) || 0) || a.localeCompare(b)
-  );
-  const monthlyTotalsByLabel = new Map(
-    monthScale.monthLabels.map(label => [
-      label,
-      departments.reduce(
-        (sum, department) => sum + Number(monthlySeriesMaps.get(department)?.get(label) || 0),
-        0
-      )
-    ])
-  );
-  const milestoneProgressData = milestones.map((milestone, index) => {
-    const plannedValue = monthScale.toAxisValue(milestone.planned_date);
-    const actualValue = monthScale.toAxisValue(milestone.actual_date);
-    const anchorValue = plannedValue ?? actualValue ?? Math.max(monthScale.min + 0.16, monthScale.max - 0.16);
-    const pendingValue = actualValue ?? Math.min(monthScale.max - 0.08, anchorValue + 0.18);
+  const departments = monthlyHours.departments || [];
+  const labels = monthlyHours.labels || [];
 
+  const series = departments.map(dept => {
+    const s = monthlyHours.series.find(s => s.name === dept);
     return {
-      value: [plannedValue ?? anchorValue, actualValue ?? pendingValue, index],
-      milestone,
-      actualDateLabel: formatCompactScheduleDate(milestone.actual_date),
-      deltaLabel: buildScheduleDeltaLabel(milestone.delta_days, lang),
-      hasPlannedDate: Boolean(milestone.planned_date),
-      hasActualDate: Boolean(milestone.actual_date),
-      pendingLabel: lang === 'zh' ? '未到达' : 'Pending'
+      name: dept,
+      type: 'bar',
+      stack: 'hours',
+      barMaxWidth: 36,
+      emphasis: { focus: 'series' },
+      data: s ? s.data.map(v => Number(v || 0)) : labels.map(() => 0)
     };
   });
-
-  const series = [
-    ...departments.map((department, index) => ({
-      name: department,
-      type: 'bar',
-      stack: 'monthly-hours',
-      xAxisIndex: 0,
-      yAxisIndex: 0,
-      barMaxWidth: 28,
-      itemStyle: {
-        color: EDITORIAL_THEME.palette[index % EDITORIAL_THEME.palette.length],
-        borderRadius: [8, 8, 0, 0]
-      },
-      emphasis: { focus: 'series' },
-      data: monthScale.monthLabels.map((label, idx) => [
-        idx,
-        Number((monthlySeriesMaps.get(department)?.get(label) || 0).toFixed(1))
-      ])
-    })),
-    {
-      name: t.milestoneProgress,
-      type: 'custom',
-      xAxisIndex: 1,
-      yAxisIndex: 1,
-      data: milestoneProgressData,
-      renderItem: (params, api) => {
-        const item = milestoneProgressData[params.dataIndex];
-        const rowIndex = api.value(2);
-        const rowCoord = api.coord([monthScale.min, rowIndex]);
-        const plannedCoord = item.hasPlannedDate ? api.coord([api.value(0), rowIndex]) : null;
-        const actualCoord = item.hasActualDate ? api.coord([api.value(1), rowIndex]) : null;
-        const pendingCoord = !item.hasActualDate ? api.coord([api.value(1), rowIndex]) : null;
-        const trackStartX = plannedCoord?.[0] ?? actualCoord?.[0] ?? pendingCoord?.[0] ?? rowCoord[0];
-        const trackEndX = actualCoord?.[0] ?? pendingCoord?.[0] ?? trackStartX;
-        const left = Math.min(trackStartX, trackEndX);
-        const right = Math.max(trackStartX, trackEndX);
-        const trackHeight = Math.max(7, Math.min(12, api.size([0, 1])[1] * 0.26));
-        const trackWidth = Math.max(right - left, item.hasActualDate ? 4 : 16);
-        const y = rowCoord[1] - trackHeight / 2;
-        const lineHeight = Math.max(12, Math.min(22, api.size([0, 1])[1] * 0.64));
-        const lineTop = rowCoord[1] - lineHeight / 2;
-        const lineBottom = rowCoord[1] + lineHeight / 2;
-        const labelText = item.hasActualDate ? item.actualDateLabel : item.pendingLabel;
-        const labelX = (actualCoord?.[0] ?? pendingCoord?.[0] ?? right) + 7;
-
-        return {
-          type: 'group',
-          children: [
-            {
-              type: 'rect',
-              shape: {
-                x: left,
-                y,
-                width: trackWidth,
-                height: trackHeight,
-                r: trackHeight / 2
-              },
-              style: {
-                fill: item.hasActualDate ? 'rgba(140, 156, 184, 0.12)' : 'rgba(255, 139, 75, 0.08)',
-                stroke: item.hasActualDate ? 'rgba(126, 145, 175, 0.26)' : 'rgba(255, 139, 75, 0.34)',
-                lineWidth: 1,
-                lineDash: item.hasActualDate ? undefined : [4, 3]
-              }
-            },
-            ...(plannedCoord ? [{
-              type: 'line',
-              shape: {
-                x1: plannedCoord[0],
-                y1: lineTop,
-                x2: plannedCoord[0],
-                y2: lineBottom
-              },
-              style: {
-                stroke: SCHEDULE_SERIES_COLORS.planned,
-                lineWidth: 2,
-                opacity: 0.92
-              }
-            }] : []),
-            ...(actualCoord ? [{
-              type: 'line',
-              shape: {
-                x1: actualCoord[0],
-                y1: lineTop - 1,
-                x2: actualCoord[0],
-                y2: lineBottom + 1
-              },
-              style: {
-                stroke: SCHEDULE_SERIES_COLORS.actual,
-                lineWidth: 3,
-                shadowBlur: 10,
-                shadowColor: 'rgba(77, 114, 255, 0.22)'
-              }
-            }] : pendingCoord ? [{
-              type: 'line',
-              shape: {
-                x1: pendingCoord[0],
-                y1: lineTop,
-                x2: pendingCoord[0],
-                y2: lineBottom
-              },
-              style: {
-                stroke: SCHEDULE_SERIES_COLORS.pending,
-                lineWidth: 2,
-                lineDash: [4, 3],
-                opacity: 0.92
-              }
-            }] : []),
-            ...(labelText ? [{
-              type: 'text',
-              style: {
-                x: labelX,
-                y: rowCoord[1] - 6,
-                text: labelText,
-                fill: item.hasActualDate ? SCHEDULE_SERIES_COLORS.actual : SCHEDULE_SERIES_COLORS.pending,
-                font: '700 10px "IBM Plex Sans", "Noto Sans SC", sans-serif'
-              }
-            }] : [])
-          ]
-        };
-      },
-      z: 100
-    }
-  ];
 
   return {
     color: EDITORIAL_THEME.palette,
@@ -568,120 +411,46 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
       show: hasMonthlyHours,
       data: departments,
       type: 'scroll',
-      top: 206,
+      top: 6,
       left: 'center',
-      right: 'auto',
-      bottom: 'auto',
       itemGap: 14,
       textStyle: chartText
     },
     tooltip: {
       ...tooltipBase,
-      trigger: 'item',
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
       formatter: (params) => {
-        if (params.seriesType === 'custom') {
-          const milestone = params.data?.milestone;
-          if (!milestone) return '';
-          const plannedDate = milestone.planned_date ? dayjs(milestone.planned_date).format('YYYY-MM-DD') : '--';
-          const actualDate = milestone.actual_date ? dayjs(milestone.actual_date).format('YYYY-MM-DD') : (lang === 'zh' ? '未到达' : 'Pending');
-          const deltaLabel = buildScheduleDeltaLabel(milestone.delta_days, lang) || '--';
-          return `
-            <div style="font-weight:800; margin-bottom:6px;">${milestone.name}</div>
-            <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '计划' : 'Planned'}</span><strong>${plannedDate}</strong></div>
-            <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '实际' : 'Actual'}</span><strong>${actualDate}</strong></div>
-            <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '变化' : 'Delta'}</span><strong>${deltaLabel}</strong></div>
-          `;
-        }
-
-        const monthLabelKey = params.name || params.axisValue || '--';
-        const monthLabel = formatScheduleMonthLabel(monthLabelKey);
-        return `
-          <div style="font-weight:800; margin-bottom:6px;">${monthLabel}</div>
-          <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '部门' : 'Department'}</span><strong>${params.seriesName}</strong></div>
-          <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '工时' : 'Hours'}</span><strong>${formatScheduleNumber(params.value)}h</strong></div>
-          <div style="display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '月度总工时' : 'Monthly Total'}</span><strong>${formatScheduleNumber(monthlyTotalsByLabel.get(monthLabelKey) || 0)}h</strong></div>
-        `;
+        if (!Array.isArray(params) || params.length === 0) return '';
+        const month = params[0].name || '--';
+        const total = params.reduce((s, p) => s + Number(p.value || 0), 0);
+        let html = `<div style="font-weight:800; margin-bottom:6px;">${month}</div>`;
+        params.filter(p => p.value > 0).forEach(p => {
+          html += `<div style="display:flex; justify-content:space-between; gap:14px;"><span>${p.marker} ${p.seriesName}</span><strong>${formatScheduleNumber(p.value)}h</strong></div>`;
+        });
+        html += `<div style="border-top:1px solid #eee; margin-top:4px; padding-top:4px; display:flex; justify-content:space-between; gap:14px;"><span>${lang === 'zh' ? '合计' : 'Total'}</span><strong>${formatScheduleNumber(total)}h</strong></div>`;
+        return html;
       }
     },
-    grid: [
-      { left: 110, right: 132, top: 40, height: 176 },
-      { left: 110, right: 132, top: 242, height: 240 }
-    ],
-    xAxis: [
-      {
-        gridIndex: 0,
-        type: 'value',
-        position: 'top',
-        min: monthScale.min,
-        max: monthScale.max,
-        interval: 1,
-        axisLabel: {
-          ...chartAxis,
-          fontSize: 10.5,
-          formatter: (value) => {
-            const index = Math.round(value);
-            return formatScheduleMonthLabel(monthScale.monthLabels[index] || '');
-          }
-        },
-        axisTick: { show: false },
-        axisLine: { lineStyle: { color: EDITORIAL_THEME.border } },
-        splitLine: chartSplitLine
-      },
-      {
-        gridIndex: 1,
-        type: 'value',
-        min: monthScale.min,
-        max: monthScale.max,
-        interval: 1,
-        axisLabel: { show: false },
-        axisTick: { show: false },
-        axisLine: { show: false },
-        splitLine: { show: false }
-      }
-    ],
-    yAxis: [
-      {
-        gridIndex: 0,
-        type: 'value',
-        min: 0,
-        axisLabel: {
-          ...chartAxis,
-          formatter: value => `${value}h`
-        },
-        splitLine: chartSplitLine
-      },
-      {
-        gridIndex: 1,
-        type: 'category',
-        position: 'right',
-        data: milestones.map(milestone => milestone.name),
-        inverse: true,
-        axisLabel: {
-          ...chartAxis,
-          fontSize: 9,
-          width: 92,
-          overflow: 'truncate'
-        },
-        axisTick: { show: false },
-        axisLine: { show: false }
-      }
-    ],
+    grid: { left: 60, right: 30, top: 50, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLabel: { ...chartAxis, fontSize: 10.5 },
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: EDITORIAL_THEME.border } }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { ...chartAxis, formatter: v => `${v}h` },
+      splitLine: chartSplitLine
+    },
     series,
     graphic: [
-      {
-        type: 'text',
-        left: 20,
-        top: 10,
-        style: {
-          text: t.monthlyHours,
-          fill: EDITORIAL_THEME.graphite,
-          font: '700 13px "IBM Plex Sans", "Noto Sans SC", sans-serif'
-        }
-      },
       ...(!hasMonthlyHours ? [{
         type: 'text',
         left: 'center',
-        top: 168,
+        top: 'middle',
         style: {
           text: t.scheduleHoursEmpty,
           fill: EDITORIAL_THEME.slateSoft,
@@ -1956,39 +1725,9 @@ const App = () => {
                         </div>
                       </div>
 
-                      <div className="project-cycle-grid">
-                        <div className="hero-panel-stat">
-                          <span>{t.plannedCycle}</span>
-                          <strong>{formatScheduleNumber(project.cycle_summary?.planned_days)}</strong>
-                        </div>
-                        <div className="hero-panel-stat">
-                          <span>{t.actualCycle}</span>
-                          <strong>{formatScheduleNumber(project.cycle_summary?.actual_days)}</strong>
-                        </div>
-                        <div className="hero-panel-stat">
-                          <span>{t.deltaCycle}</span>
-                          <strong>{formatScheduleNumber(project.cycle_summary?.delta_days)}</strong>
-                        </div>
-                      </div>
-
-                      <div className="project-schedule-legend" aria-label={t.milestoneProgress}>
-                        <span className="project-schedule-legend-item">
-                          <span className="project-schedule-legend-marker planned" aria-hidden="true" />
-                          <span>{t.scheduleLegendPlanned}</span>
-                        </span>
-                        <span className="project-schedule-legend-item">
-                          <span className="project-schedule-legend-marker actual" aria-hidden="true" />
-                          <span>{t.scheduleLegendActual}</span>
-                        </span>
-                        <span className="project-schedule-legend-item">
-                          <span className="project-schedule-legend-marker pending" aria-hidden="true" />
-                          <span>{t.scheduleLegendPending}</span>
-                        </span>
-                      </div>
-
                       <ReactECharts
                         option={scheduleChartOptions.get(project.project_name)}
-                        style={{ height: '560px' }}
+                        style={{ height: '360px' }}
                         notMerge={true}
                       />
                     </article>
