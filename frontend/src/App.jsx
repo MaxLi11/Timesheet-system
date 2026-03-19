@@ -432,7 +432,7 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         return html;
       }
     },
-    grid: { left: 60, right: 30, top: 50, bottom: 30 },
+    grid: { left: 60, right: 30, top: 40, bottom: 30 },
     xAxis: {
       type: 'category',
       data: labels,
@@ -554,6 +554,11 @@ const buildMilestoneIntervalChartOption = (project, lang, t) => {
     return html;
   };
 
+  const rowCount = yRows.length;
+  // 如果行数过多（超过 12 行），启用滚动条，保持图表高度固定不膨胀
+  const maxVisibleRows = 12;
+  const showScroll = rowCount > maxVisibleRows;
+
   return {
     color: EDITORIAL_THEME.palette,
     animationDuration: 450,
@@ -572,7 +577,31 @@ const buildMilestoneIntervalChartOption = (project, lang, t) => {
       axisPointer: { type: 'shadow' },
       formatter: tooltipFormatter
     },
-    grid: { left: 176, right: 24, top: 16, bottom: 54 },
+    grid: { left: 176, right: showScroll ? 36 : 24, top: 16, bottom: 54 },
+    dataZoom: showScroll ? [
+      {
+        type: 'slider',
+        yAxisIndex: 0,
+        show: true,
+        right: 8,
+        width: 12,
+        startValue: 0,
+        endValue: maxVisibleRows - 1,
+        borderColor: 'transparent',
+        fillerColor: 'rgba(77, 114, 255, 0.16)',
+        backgroundColor: 'rgba(115, 138, 176, 0.06)',
+        handleSize: '0%', // 隐藏手柄，仅拖拽滑块
+        showDetail: false,
+        showDataShadow: false,
+        brushSelect: false
+      },
+      {
+        type: 'inside',
+        yAxisIndex: 0,
+        zoomOnMouseWheel: false,
+        moveOnMouseWheel: true
+      }
+    ] : [],
     xAxis: {
       type: 'value',
       axisLabel: { ...chartAxis, formatter: v => `${v}h` },
@@ -1923,12 +1952,7 @@ const App = () => {
                         option={scheduleChartMode === 'monthly'
                           ? scheduleChartOptions.get(project.project_name)
                           : milestoneChartOptions.get(project.project_name)}
-                        style={{
-                          // milestone 模式：行数 = 节点数 * 2 - 1（交错行），每行约 38px
-                          height: scheduleChartMode === 'milestone'
-                            ? `${Math.max(340, (project.milestones || []).length * 2 * 38 + 80)}px`
-                            : '360px'
-                        }}
+                        style={{ height: '320px' }} // 统一固定高度，彻底压缩空间
                         notMerge={true}
                       />
                     </article>

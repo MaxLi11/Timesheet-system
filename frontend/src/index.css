@@ -1376,6 +1376,10 @@ input[type='checkbox']:checked::after {
   .overview-secondary-grid {
     grid-template-columns: 1fr;
   }
+
+  .project-schedule-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 980px) {
