@@ -844,6 +844,7 @@ const App = () => {
     ? '当前项目暂时没有 Close 工时'
     : 'No Close hours are available for the current project yet.';
   t.customDataNav = lang === 'zh' ? '定制化数据' : 'Custom Data';
+  t.customDataHeroTitle = lang === 'zh' ? '每项目工时数据导出' : 'Project Hours Data Export';
   t.customDataTitle = lang === 'zh' ? '定制化数据导出' : 'Custom Data Export';
   t.customDataSubtitle = lang === 'zh'
     ? '按 Project + Close 口径导出每项目工时宽表。'
@@ -927,6 +928,7 @@ const App = () => {
     t.approval,
     t.approvalSubtitle,
     t.approvalTitle,
+    t.customDataHeroTitle,
     t.customDataNav,
     t.customDataSubtitle,
     t.customDataTitle,
@@ -1670,9 +1672,7 @@ const App = () => {
             {activeTab === 'custom_data' ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', width: '100%' }}>
                 <div style={{ minWidth: 0, flex: '1 1 auto' }}>
-                  <p className="page-eyebrow">{pageMeta.eyebrow}</p>
-                  <h1 className="page-title">{pageMeta.title}</h1>
-                  <p className="page-summary">{pageMeta.description}</p>
+                  <h1 className="page-title" style={{ marginBottom: 0 }}>{t.customDataHeroTitle}</h1>
                 </div>
                 <label className="export-btn" style={{ ...secondaryActionButtonStyle, cursor: 'pointer', margin: 0, flex: '0 0 auto' }}>
                   <FileDown size={16} /> {t.uploadWorkWeek}
