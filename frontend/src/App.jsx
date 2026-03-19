@@ -1234,9 +1234,14 @@ const App = () => {
 
   const filteredData = useMemo(() => {
     // Fast path: no filters active
-    if (!dashYear && !dashMonth && !dashWeek && dashSelectedDepts.size === 0 && dashSelectedProjects.size === 0) return data;
+    if (!dashYear && !dashMonth && !dashWeek && dashSelectedDepts.size === 0 && dashSelectedProjects.size === 0) {
+      return data.filter(item => item.project_name !== '非项目名称');
+    }
 
     return data.filter(item => {
+      // 全局剔除非项目名称（工时走势图、项目分布、总工时等仪表盘指标不再统计该项）
+      if (item.project_name === '非项目名称') return false;
+
       // Time filters — only parse date when a time filter is actually set
       if (dashYear || dashMonth || dashWeek) {
         if (!item.start_date) return false;
@@ -1255,9 +1260,12 @@ const App = () => {
   const dashAvailableDepts = useMemo(() => {
     // Fast path: no time filter — just grab all distinct depts without dayjs
     if (!dashYear && !dashMonth && !dashWeek)
-      return Array.from(new Set(data.map(i => i.department).filter(Boolean))).sort();
+      return Array.from(new Set(data.filter(i => i.project_name !== '非项目名称').map(i => i.department).filter(Boolean))).sort();
 
     const timeFiltered = data.filter(item => {
+      // 排除非项目名称
+      if (item.project_name === '非项目名称') return false;
+
       if (!item.start_date) return false;
       const d = dayjs(item.start_date);
       if (dashYear && d.year().toString() !== dashYear) return false;
@@ -1271,9 +1279,12 @@ const App = () => {
   const dashAvailableProjects = useMemo(() => {
     // Fast path: no time or dept filters
     if (!dashYear && !dashMonth && !dashWeek && dashSelectedDepts.size === 0)
-      return Array.from(new Set(data.map(i => i.project_name).filter(Boolean))).sort();
+      return Array.from(new Set(data.filter(i => i.project_name !== '非项目名称').map(i => i.project_name).filter(Boolean))).sort();
 
     const preFiltered = data.filter(item => {
+      // 排除非项目名称
+      if (item.project_name === '非项目名称') return false;
+
       if (dashYear || dashMonth || dashWeek) {
         if (!item.start_date) return false;
         const d = dayjs(item.start_date);
@@ -1441,9 +1452,7 @@ const App = () => {
   };
 
   const trendChartOpt = useMemo(() => {
-    // 过滤掉 timesheet 表里的“非项目名称”工时，不在此走势图中展示
-    const trendData = filteredData.filter(item => item.project_name !== '非项目名称');
-    const agg = dataHelper.aggregateProjectData(trendData, effectiveDashGranularity);
+    const agg = dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity);
     // The structure of `agg` from dataHelper.aggregateProjectData is expected to be:
     // { projects: [...], labels: [...], series: [...] }
     // The instruction provided `const projNames = Object.keys(agg); const periods = Array.from(new Set(projNames.flatMap(p => Object.keys(agg[p])))).sort();`
