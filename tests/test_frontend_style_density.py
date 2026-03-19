@@ -122,7 +122,7 @@ class FrontendStyleDensityTests(unittest.TestCase):
             self.app,
         )
         self.assertIn(
-            "dataHelper.aggregateProjectDeptData(filteredData, effectiveDashGranularity)",
+            "dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity)",
             self.app,
         )
         self.assertIn('className="granularity-toggle"', self.app)
@@ -134,6 +134,8 @@ class FrontendStyleDensityTests(unittest.TestCase):
         self.assertCssPattern(
             r"\.granularity-toggle button\s*\{[^}]*min-height:\s*2rem;[^}]*font-size:\s*0\.76rem;"
         )
+        self.assertIn("{activeTab === 'overview' && (", self.app)
+        self.assertNotIn("{(activeTab === 'overview' || activeTab === 'project_analysis') && (", self.app)
 
     def test_summary_pills_and_table_copy_are_reduced(self):
         self.assertCssPattern(
@@ -166,6 +168,12 @@ class FrontendStyleDensityTests(unittest.TestCase):
         self.assertNotIn("activeTab === 'gantt'", self.app)
         self.assertNotIn("const ganttOpt = useMemo", self.app)
         self.assertNotIn("ReactECharts option={ganttOpt}", self.app)
+
+    def test_project_analysis_legacy_module_is_removed(self):
+        self.assertNotIn('className="legacy-project-chart-card', self.app)
+        self.assertNotIn('className="legacy-chart-toggle"', self.app)
+        self.assertNotIn("const projectAnalysisOpt = useMemo(() => {", self.app)
+        self.assertIn('className="project-schedule-actions"', self.app)
 
 
 if __name__ == "__main__":

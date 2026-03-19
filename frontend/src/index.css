@@ -943,11 +943,15 @@ button:active {
   position: absolute;
   top: calc(100% + 12px);
   left: 0;
+  display: flex;
+  flex-direction: column;
   width: min(560px, calc(100vw - 4rem));
+  max-height: min(30rem, calc(100vh - 8rem));
   padding: 1.15rem;
   border-radius: 24px;
   z-index: 120;
   box-shadow: var(--shadow-lg);
+  overflow: hidden;
 }
 
 .project-panel-header {
@@ -983,8 +987,11 @@ button:active {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.7rem;
-  max-height: 22rem;
+  max-height: none;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding-right: 0.25rem;
 }
 
@@ -1150,38 +1157,28 @@ input[type='checkbox']:checked::after {
   line-height: 1.7;
 }
 
-.legacy-project-chart-card {
-  padding: 1rem 1.08rem;
-}
-
-.legacy-chart-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-height: 2.35rem;
-  padding: 0.5rem 0.8rem;
-  border-radius: 16px;
-  background: rgba(236, 243, 255, 0.96);
-  color: var(--ink);
-  box-shadow: none;
-}
-
-.legacy-chart-toggle:hover {
-  background: rgba(228, 237, 255, 0.98);
-}
-
 .project-schedule-shell {
   display: flex;
   flex-direction: column;
   gap: 0.96rem;
 }
 
-.project-schedule-toolbar {
+.project-schedule-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.78rem;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: flex-end;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.project-schedule-actions .filter-group {
+  min-width: 0;
+}
+
+.project-schedule-actions .approval-project-panel {
+  left: auto;
+  right: 0;
 }
 
 .schedule-upload-control {
@@ -1228,6 +1225,46 @@ input[type='checkbox']:checked::after {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.56rem;
+}
+
+.project-schedule-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.9rem;
+  align-items: center;
+}
+
+.project-schedule-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.project-schedule-legend-marker {
+  display: inline-block;
+  width: 0.95rem;
+  height: 1rem;
+  border-radius: 999px;
+  border-left: 3px solid transparent;
+  background: rgba(115, 138, 176, 0.1);
+}
+
+.project-schedule-legend-marker.planned {
+  background: rgba(122, 166, 255, 0.2);
+  border-left-color: rgba(122, 166, 255, 0.95);
+}
+
+.project-schedule-legend-marker.actual {
+  background: rgba(77, 114, 255, 0.18);
+  border-left-color: rgba(77, 114, 255, 1);
+}
+
+.project-schedule-legend-marker.pending {
+  background: rgba(255, 139, 75, 0.08);
+  border-left: 2px dashed rgba(255, 139, 75, 0.95);
 }
 
 .project-schedule-empty {
@@ -1304,9 +1341,20 @@ input[type='checkbox']:checked::after {
 }
 
 @media (max-width: 900px) {
-  .project-schedule-toolbar {
+  .project-schedule-actions {
     flex-direction: column;
     align-items: stretch;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .project-schedule-actions .filter-group {
+    width: 100%;
+  }
+
+  .project-schedule-actions .approval-project-panel {
+    left: 0;
+    right: auto;
   }
 
   .project-cycle-grid {
@@ -1392,6 +1440,8 @@ input[type='checkbox']:checked::after {
     position: static;
     width: 100%;
     margin-top: 0.75rem;
+    max-height: none;
+    overflow: visible;
   }
 
   .project-schedule-card-header {
