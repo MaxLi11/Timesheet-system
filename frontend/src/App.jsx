@@ -1670,20 +1670,29 @@ const App = () => {
             )}
           </div>
 
-          <div className="page-hero-panel">
-            <div className="hero-panel-header">
-              <span>{uiText.currentView}</span>
-              <strong>{pageMeta.eyebrow}</strong>
+          {activeTab === 'custom_data' ? (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+              <label className="export-btn" style={{ cursor: 'pointer', margin: 0 }}>
+                <FileDown size={16} /> {t.uploadWorkWeek}
+                <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
+              </label>
             </div>
-            <div className="hero-panel-grid">
-              {pageHighlights.map((item) => (
-                <div key={item.label} className="hero-panel-stat">
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </div>
-              ))}
+          ) : (
+            <div className="page-hero-panel">
+              <div className="hero-panel-header">
+                <span>{uiText.currentView}</span>
+                <strong>{pageMeta.eyebrow}</strong>
+              </div>
+              <div className="hero-panel-grid">
+                {pageHighlights.map((item) => (
+                  <div key={item.label} className="hero-panel-stat">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </header>
 
         {activeTab === 'overview' && (
@@ -1975,15 +1984,9 @@ const App = () => {
                   <h3 style={{ margin: 0 }}>{t.customDataTitle}</h3>
                   <p className="module-caption" style={{ marginTop: '8px' }}>{t.customDataSubtitle}</p>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button type="button" className="export-btn" onClick={exportCustomProjectHoursExcel}>
-                    <FileDown size={16} /> {t.exportCustomData}
-                  </button>
-                  <label className="export-btn" style={{ cursor: 'pointer', margin: 0 }}>
-                    <FileDown size={16} /> {t.uploadWorkWeek}
-                    <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
-                  </label>
-                </div>
+                <button type="button" className="export-btn" onClick={exportCustomProjectHoursExcel}>
+                  <FileDown size={16} /> {t.exportCustomData}
+                </button>
               </div>
             </div>
 
