@@ -1587,11 +1587,28 @@ const App = () => {
           <div className="brand-lockup">
             <div className="logo">
               <div className="logo-icon">
-                <Calendar size={18} />
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="logo-cyan" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#05D5FF" />
+                      <stop offset="100%" stopColor="#5585FF" />
+                    </linearGradient>
+                    <linearGradient id="logo-purple" x1="0%" y1="100%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#FF2E93" />
+                      <stop offset="100%" stopColor="#FF8000" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M5 3H19C19 3 18 10 12 12C6 10 5 3 5 3Z" fill="url(#logo-cyan)" fillOpacity="0.8" stroke="url(#logo-cyan)" strokeWidth="1.5" strokeLinejoin="round"/>
+                  <path d="M5 21H19C19 21 18 14 12 12C6 14 5 21 5 21Z" fill="url(#logo-purple)" fillOpacity="0.8" stroke="url(#logo-purple)" strokeWidth="1.5" strokeLinejoin="round"/>
+                  <circle cx="12" cy="12" r="2.5" fill="#FFFFFF" />
+                </svg>
               </div>
               <div className="logo-copy">
-                <span>AnxShowtime</span>
-                <small>{uiText.workspace}</small>
+                <span className="logo-title">AnxShowtime</span>
+                <div className="logo-badge">
+                  <span className="logo-badge-dot"></span>
+                  {uiText.workspace}
+                </div>
               </div>
             </div>
           </div>
