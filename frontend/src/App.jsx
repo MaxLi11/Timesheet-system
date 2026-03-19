@@ -554,9 +554,6 @@ const buildMilestoneIntervalChartOption = (project, lang, t) => {
     return html;
   };
 
-  // 每个节点行行高约 38px，每个区间行行高约 36px
-  const rowCount = yRows.length;
-
   return {
     color: EDITORIAL_THEME.palette,
     animationDuration: 450,
