@@ -1667,7 +1667,7 @@ const App = () => {
       </header>
 
       <main className="main-content">
-        <header className={`page-hero ${activeTab === 'overview' ? 'page-hero-overview' : ''}`} style={activeTab === 'custom_data' ? { gridTemplateColumns: '1fr' } : {}}>
+        <header className={`page-hero ${activeTab === 'overview' ? 'page-hero-overview' : ''}`} style={activeTab === 'custom_data' || activeTab === 'project_analysis' ? { gridTemplateColumns: '1fr' } : {}}>
           <div className="page-intro-copy">
             {activeTab === 'custom_data' ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', width: '100%' }}>
@@ -1678,6 +1678,55 @@ const App = () => {
                   <FileDown size={16} /> {t.uploadWorkWeek}
                   <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
                 </label>
+              </div>
+            ) : activeTab === 'project_analysis' ? (
+              <div className="project-schedule-actions" style={{ width: '100%', justifyContent: 'flex-start', alignItems: 'flex-end' }}>
+                <label className="utility-upload schedule-upload-control" style={{ margin: 0 }}>
+                  <Upload size={18} />
+                  <span>{t.uploadProjectSchedule}</span>
+                  <input type="file" hidden onChange={handleProjectScheduleUpload} />
+                </label>
+                <div className="filter-group dropdown-container" ref={scheduleProjectPickerRef} style={{ marginLeft: 0 }}>
+                  <label>{t.filterScheduleProjects}</label>
+                  <button
+                    type="button"
+                    className="dropdown-button"
+                    onClick={() => setScheduleProjectPickerOpen(prev => !prev)}
+                  >
+                    {scheduleSelectedProjects.size === 0
+                      ? t.allScheduleProjects
+                      : (lang === 'zh' ? `已选 ${scheduleSelectedProjects.size} 个` : `${scheduleSelectedProjects.size} selected`)}
+                    <ChevronDown size={16} />
+                  </button>
+                  {scheduleProjectPickerOpen && (
+                    <div className="approval-project-panel">
+                      <div className="project-panel-header">
+                        <span className="filter-group-label">{t.filterScheduleProjects}</span>
+                        <div className="project-panel-btns">
+                          <button type="button" onClick={() => setScheduleSelectedProjects(new Set(scheduleProjects.map(project => project.project_name)))}>
+                            {t.selectAll}
+                          </button>
+                          <button type="button" onClick={() => setScheduleSelectedProjects(new Set())}>
+                            {t.clearAll}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="project-checkboxes">
+                        {scheduleProjects.map(project => (
+                          <label key={project.project_name} className={`project-chip ${scheduleSelectedProjects.has(project.project_name) ? 'selected' : ''}`}>
+                            <input
+                              type="checkbox"
+                              checked={scheduleSelectedProjects.has(project.project_name)}
+                              onChange={() => toggleScheduleProject(project.project_name)}
+                            />
+                            <span className="chip-label">{project.project_name}</span>
+                          </label>
+                        ))}
+                        {scheduleProjects.length === 0 && <span className="text-muted empty-state-text">{t.noScheduleData}</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <>
@@ -1705,7 +1754,7 @@ const App = () => {
             )}
           </div>
 
-          {activeTab !== 'custom_data' && (
+          {activeTab !== 'custom_data' && activeTab !== 'project_analysis' && (
             <div className="page-hero-panel">
               <div className="hero-panel-header">
                 <span>{uiText.currentView}</span>
@@ -1881,56 +1930,6 @@ const App = () => {
         {activeTab === 'project_analysis' && (
           <div className="project-schedule-section section-shell">
             <div className="card project-schedule-shell elevated-module">
-              <div className="card-heading-row">
-                <div className="project-schedule-actions">
-                  <label className="utility-upload schedule-upload-control">
-                    <Upload size={18} />
-                    <span>{t.uploadProjectSchedule}</span>
-                    <input type="file" hidden onChange={handleProjectScheduleUpload} />
-                  </label>
-                  <div className="filter-group dropdown-container" ref={scheduleProjectPickerRef}>
-                    <label>{t.filterScheduleProjects}</label>
-                    <button
-                      type="button"
-                      className="dropdown-button"
-                      onClick={() => setScheduleProjectPickerOpen(prev => !prev)}
-                    >
-                      {scheduleSelectedProjects.size === 0
-                        ? t.allScheduleProjects
-                        : (lang === 'zh' ? `已选 ${scheduleSelectedProjects.size} 个` : `${scheduleSelectedProjects.size} selected`)}
-                      <ChevronDown size={16} />
-                    </button>
-                    {scheduleProjectPickerOpen && (
-                      <div className="approval-project-panel">
-                        <div className="project-panel-header">
-                          <span className="filter-group-label">{t.filterScheduleProjects}</span>
-                          <div className="project-panel-btns">
-                            <button type="button" onClick={() => setScheduleSelectedProjects(new Set(scheduleProjects.map(project => project.project_name)))}>
-                              {t.selectAll}
-                            </button>
-                            <button type="button" onClick={() => setScheduleSelectedProjects(new Set())}>
-                              {t.clearAll}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="project-checkboxes">
-                          {scheduleProjects.map(project => (
-                            <label key={project.project_name} className={`project-chip ${scheduleSelectedProjects.has(project.project_name) ? 'selected' : ''}`}>
-                              <input
-                                type="checkbox"
-                                checked={scheduleSelectedProjects.has(project.project_name)}
-                                onChange={() => toggleScheduleProject(project.project_name)}
-                              />
-                              <span className="chip-label">{project.project_name}</span>
-                            </label>
-                          ))}
-                          {scheduleProjects.length === 0 && <span className="text-muted empty-state-text">{t.noScheduleData}</span>}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
 
               {scheduleProjects.length === 0 ? (
                 <div className="project-schedule-empty">{t.noScheduleData}</div>
