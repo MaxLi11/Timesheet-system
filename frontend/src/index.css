@@ -1168,8 +1168,8 @@ input[type='checkbox']:checked::after {
   flex-wrap: wrap;
   gap: 0.78rem;
   align-items: flex-end;
-  justify-content: flex-end;
-  margin-left: auto;
+  justify-content: flex-start;
+  margin-left: 0;
 }
 
 .project-schedule-actions .filter-group {

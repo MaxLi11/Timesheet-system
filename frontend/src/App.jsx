@@ -1882,10 +1882,6 @@ const App = () => {
           <div className="project-schedule-section section-shell">
             <div className="card project-schedule-shell elevated-module">
               <div className="card-heading-row">
-                <div>
-                  <h3>{t.scheduleMonitorTitle}</h3>
-                  <p className="module-caption">{t.scheduleMonitorSubtitle}</p>
-                </div>
                 <div className="project-schedule-actions">
                   <label className="utility-upload schedule-upload-control">
                     <Upload size={18} />
