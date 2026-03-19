@@ -1519,12 +1519,12 @@ const App = () => {
       const monthCount = (projMonthlyData[i.name]?.size || 1);
       return parseFloat((i.value / monthCount).toFixed(1));
     });
-    
+
     return {
       color: [EDITORIAL_THEME.accent, EDITORIAL_THEME.brass],
-      tooltip: { 
+      tooltip: {
         ...tooltipBase,
-        trigger: 'axis', 
+        trigger: 'axis',
         axisPointer: { type: 'shadow' },
         formatter: (params) => {
           let res = `${params[0].name}<br/>`;
@@ -1536,18 +1536,18 @@ const App = () => {
       },
       legend: { data: [t.totalHours, t.avgMonthlyHours], textStyle: chartText, top: 0 },
       grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
-      xAxis: { 
-        type: 'category', 
+      xAxis: {
+        type: 'category',
         data: sorted.map(i => i.name),
-        axisLabel: { 
+        axisLabel: {
           ...chartAxis,
           rotate: sorted.length > 5 ? 30 : 0,
           interval: 0
         }
       },
       yAxis: [
-        { 
-          type: 'value', 
+        {
+          type: 'value',
           name: t.totalHours,
           axisLabel: chartAxis,
           splitLine: chartSplitLine
@@ -1584,6 +1584,25 @@ const App = () => {
     };
   }, [filteredData, t.totalHours, t.avgMonthlyHours]);
 
+
+  const actionButtonStyle = {
+    width: '220px',
+    minHeight: '2.9rem',
+    justifyContent: 'center',
+    boxSizing: 'border-box'
+  };
+
+  const secondaryActionButtonStyle = {
+    ...actionButtonStyle,
+    background: 'rgba(77, 114, 255, 0.12)',
+    color: 'var(--primary)',
+    border: '1px solid rgba(77, 114, 255, 0.25)',
+    boxShadow: 'none'
+  };
+
+  const primaryCardHeadingStyle = activeTab === 'custom_data'
+    ? { alignItems: 'flex-start' }
+    : undefined;
   return (
     <div className={`app-shell ${isEmbed ? 'is-embed' : ''}`}>
       <div className="app-glow app-glow-one" aria-hidden="true" />
@@ -1671,7 +1690,7 @@ const App = () => {
               )}
             </div>
             {activeTab === 'custom_data' && (
-              <label className="export-btn" style={{ cursor: 'pointer', margin: 0, width: '220px', flexShrink: 0, background: 'rgba(77, 114, 255, 0.12)', color: 'var(--primary)', border: '1px solid rgba(77, 114, 255, 0.25)', boxShadow: 'none' }}>
+              <label className="export-btn" style={{ ...secondaryActionButtonStyle, cursor: 'pointer', margin: 0, flexShrink: 0 }}>
                 <FileDown size={16} /> {t.uploadWorkWeek}
                 <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
               </label>
@@ -1780,8 +1799,8 @@ const App = () => {
                 {/* Department Multi-select Dropdown */}
                 <div className="filter-group dropdown-container">
                   <label>{t.filterDept}</label>
-                  <button 
-                    className="dropdown-button" 
+                  <button
+                    className="dropdown-button"
                     onClick={() => { setDashDeptOpen(!dashDeptOpen); setDashProjOpen(false); }}
                   >
                     {dashSelectedDepts.size === 0 ? (t.allDepts || '全部部门') : `已选择 ${dashSelectedDepts.size} 项`}
@@ -1815,8 +1834,8 @@ const App = () => {
                 {/* Project Multi-select Dropdown */}
                 <div className="filter-group dropdown-container">
                   <label>{t.filterProject}</label>
-                  <button 
-                    className="dropdown-button" 
+                  <button
+                    className="dropdown-button"
                     onClick={() => { setDashProjOpen(!dashProjOpen); setDashDeptOpen(false); }}
                   >
                     {dashSelectedProjects.size === 0 ? (t.allProjects || '全部项目') : `已选择 ${dashSelectedProjects.size} 项`}
@@ -1980,12 +1999,12 @@ const App = () => {
         {activeTab === 'custom_data' && (
           <div className="section-shell">
             <div className="card custom-data-card elevated-module">
-              <div className="card-heading-row" style={{ alignItems: 'flex-start' }}>
+              <div className="card-heading-row" style={primaryCardHeadingStyle}>
                 <div>
                   <h3 style={{ margin: 0 }}>{t.customDataTitle}</h3>
                   <p className="module-caption" style={{ marginTop: '8px' }}>{t.customDataSubtitle}</p>
                 </div>
-                <button type="button" className="export-btn" style={{ width: '220px' }} onClick={exportCustomProjectHoursExcel}>
+                <button type="button" className="export-btn" style={actionButtonStyle} onClick={exportCustomProjectHoursExcel}>
                   <FileDown size={16} /> {t.exportCustomData}
                 </button>
               </div>
@@ -1998,7 +2017,7 @@ const App = () => {
                   <h3>{t.personMonthRatioTitle}</h3>
                   <p className="module-caption">{t.personMonthRatioSubtitle}</p>
                 </div>
-                <button type="button" className="export-btn" style={{ width: '220px' }} onClick={exportPersonMonthRatioExcel}>
+                <button type="button" className="export-btn" style={actionButtonStyle} onClick={exportPersonMonthRatioExcel}>
                   <FileDown size={16} /> {t.exportPersonMonthRatio}
                 </button>
               </div>
@@ -2168,8 +2187,8 @@ const App = () => {
                 {/* Project Multi-select Dropdown (Approval Tab) */}
                 <div className="filter-group dropdown-container">
                   <label>{t.filterProject}</label>
-                  <button 
-                    className="dropdown-button" 
+                  <button
+                    className="dropdown-button"
                     onClick={() => setAppProjOpen(!appProjOpen)}
                   >
                     {selectedProjects.size === 0 ? (t.allProjects || '全部项目') : `已选择 ${selectedProjects.size} 项`}
