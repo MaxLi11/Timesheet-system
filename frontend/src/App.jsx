@@ -1970,20 +1970,20 @@ const App = () => {
         {activeTab === 'custom_data' && (
           <div className="section-shell">
             <div className="card custom-data-card elevated-module">
-              <div className="card-heading-row">
+              <div className="card-heading-row" style={{ alignItems: 'flex-start' }}>
                 <div>
-                  <h3>{t.customDataTitle}</h3>
-                  <p className="module-caption">{t.customDataSubtitle}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <h3 style={{ margin: 0 }}>{t.customDataTitle}</h3>
+                    <label className="export-btn" style={{ cursor: 'pointer', margin: 0 }}>
+                      <FileDown size={16} /> {t.uploadWorkWeek}
+                      <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
+                    </label>
+                  </div>
+                  <p className="module-caption" style={{ marginTop: '8px' }}>{t.customDataSubtitle}</p>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button type="button" className="export-btn" onClick={exportCustomProjectHoursExcel}>
-                    <FileDown size={16} /> {t.exportCustomData}
-                  </button>
-                  <label className="export-btn" style={{ cursor: 'pointer' }}>
-                    <FileDown size={16} /> {t.uploadWorkWeek}
-                    <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
-                  </label>
-                </div>
+                <button type="button" className="export-btn" onClick={exportCustomProjectHoursExcel}>
+                  <FileDown size={16} /> {t.exportCustomData}
+                </button>
               </div>
             </div>
 
