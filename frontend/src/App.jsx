@@ -1647,34 +1647,34 @@ const App = () => {
 
       <main className="main-content">
         <header className={`page-hero ${activeTab === 'overview' ? 'page-hero-overview' : ''}`} style={activeTab === 'custom_data' ? { gridTemplateColumns: '1fr' } : {}}>
-          <div className="page-intro-copy" style={activeTab === 'custom_data' ? { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } : {}}>
-            <div>
+          <div className="page-intro-copy" style={activeTab === 'custom_data' ? { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' } : {}}>
+            <div style={{ minWidth: 0 }}>
               <p className="page-eyebrow">{pageMeta.eyebrow}</p>
               <h1 className="page-title">{pageMeta.title}</h1>
               <p className="page-summary">{pageMeta.description}</p>
+
+              {activeTab === 'overview' && (
+                <div className="hero-meta-row">
+                  <span className="hero-meta-pill">
+                    <span>{uiText.liveSync}</span>
+                    <strong>{statusLabel}</strong>
+                  </span>
+                  <span className="hero-meta-pill">
+                    <span>{uiText.activeFilters}</span>
+                    <strong>{activeFilterCount}</strong>
+                  </span>
+                  <span className="hero-meta-pill">
+                    <span>{uiText.topDept}</span>
+                    <strong>{topDepartment}</strong>
+                  </span>
+                </div>
+              )}
             </div>
             {activeTab === 'custom_data' && (
-              <label className="export-btn" style={{ cursor: 'pointer', margin: 0, width: '220px', background: 'rgba(77, 114, 255, 0.12)', color: 'var(--primary)', border: '1px solid rgba(77, 114, 255, 0.25)', boxShadow: 'none' }}>
+              <label className="export-btn" style={{ cursor: 'pointer', margin: 0, width: '220px', flexShrink: 0, background: 'rgba(77, 114, 255, 0.12)', color: 'var(--primary)', border: '1px solid rgba(77, 114, 255, 0.25)', boxShadow: 'none' }}>
                 <FileDown size={16} /> {t.uploadWorkWeek}
                 <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
               </label>
-            )}
-
-            {activeTab === 'overview' && (
-              <div className="hero-meta-row">
-                <span className="hero-meta-pill">
-                  <span>{uiText.liveSync}</span>
-                  <strong>{statusLabel}</strong>
-                </span>
-                <span className="hero-meta-pill">
-                  <span>{uiText.activeFilters}</span>
-                  <strong>{activeFilterCount}</strong>
-                </span>
-                <span className="hero-meta-pill">
-                  <span>{uiText.topDept}</span>
-                  <strong>{topDepartment}</strong>
-                </span>
-              </div>
             )}
           </div>
 
