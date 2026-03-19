@@ -844,8 +844,8 @@ const App = () => {
     ? '当前项目暂时没有 Close 工时'
     : 'No Close hours are available for the current project yet.';
   t.customDataNav = lang === 'zh' ? '定制化数据' : 'Custom Data';
-  t.customDataHeroTitle = lang === 'zh' ? '每项目工时数据导出' : 'Project Hours Data Export';
-  t.customDataTitle = lang === 'zh' ? '定制化数据导出' : 'Custom Data Export';
+  t.customDataHeroTitle = lang === 'zh' ? '定制化数据导出' : 'Custom Data Export';
+  t.customDataTitle = lang === 'zh' ? '每项目工时数据导出' : 'Project Hours Data Export';
   t.customDataSubtitle = lang === 'zh'
     ? '按 Project + Close 口径导出每项目工时宽表。'
     : 'Export a wide monthly workbook using the Project + Close scope.';
