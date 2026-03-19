@@ -1680,13 +1680,13 @@ const App = () => {
                 </label>
               </div>
             ) : activeTab === 'project_analysis' ? (
-              <div className="project-schedule-actions" style={{ width: '100%', justifyContent: 'flex-start', alignItems: 'flex-end', position: 'relative', zIndex: 10 }}>
-                <label className="utility-upload schedule-upload-control" style={{ margin: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'flex-end', gap: '0.78rem', width: '100%', position: 'relative', zIndex: 10 }}>
+                <label className="utility-upload schedule-upload-control" style={{ margin: 0, flexShrink: 0 }}>
                   <Upload size={18} />
                   <span>{t.uploadProjectSchedule}</span>
                   <input type="file" hidden onChange={handleProjectScheduleUpload} />
                 </label>
-                <div className="filter-group dropdown-container" ref={scheduleProjectPickerRef} style={{ marginLeft: 0 }}>
+                <div className="filter-group dropdown-container" ref={scheduleProjectPickerRef} style={{ marginLeft: 0, flexShrink: 0 }}>
                   <label>{t.filterScheduleProjects}</label>
                   <button
                     type="button"
