@@ -1,9 +1,11 @@
-import pandas as pd
-from datetime import datetime, date
-import numpy as np
 import os
+import re
+from datetime import date, datetime
+from pathlib import Path
 
-# Default mapping embedded in the code so the Excel file is optional
+import pandas as pd
+
+
 DEFAULT_DEPT_MAPPING = {
     "110.1 R&D - Digital": "Digital",
     "110.2 R&D - Digital": "Digital",
@@ -21,7 +23,7 @@ DEFAULT_DEPT_MAPPING = {
     "120 R&D - Test": "Test",
     "125 R&D - System Eng SW": "SW",
     "125.2 R&D - System Eng SW": "SW",
-    "135.2 R&D - Product Marketing": "PM"
+    "135.2 R&D - Product Marketing": "PM",
 }
 
 _DEPT_MAPPING_CACHE = DEFAULT_DEPT_MAPPING.copy()
@@ -50,142 +52,156 @@ PROJECT_SCHEDULE_MILESTONES = [
     "RTP",
 ]
 
+TIMESHEET_COLUMN_ALIASES = {
+    "鍛樺伐": "员工",
+    "鎵€灞為儴闂?": "所属部门",
+    "鑱屼綅": "职位",
+    "宸ュ彿": "工号",
+    "寮€濮嬫棩鏈?": "开始日期",
+    "缁撴潫鏃ユ湡": "结束日期",
+    "椤圭洰鍚嶇О(浣滃簾)": "项目名称(作废)",
+    "椤圭洰鍚嶇О(鏂?": "项目名称(新)",
+    "闈為」鐩悕绉?": "非项目名称",
+    "浠诲姟璇︽儏": "任务详情",
+    "鍚堣": "合计",
+    "鏍稿噯鐘舵€?": "核准状态",
+    "褰撳墠鑺傜偣": "当前节点",
+    "鏈搷浣滆€?": "未操作者",
+}
+
+
 def load_dept_mapping():
-    """
-    Loads department name mapping from 部门简称.xlsx with caching.
-    Uses DEFAULT_DEPT_MAPPING as the base.
-    """
     global _DEPT_MAPPING_CACHE, _LAST_MAPPING_MTIME
-    mapping_path = r"d:\Antigravity\Project-timesheet\部门简称.xlsx"
-    
-    if not os.path.exists(mapping_path):
+    mapping_path = Path(__file__).resolve().parents[1] / "部门简称.xlsx"
+
+    if not mapping_path.exists():
         return _DEPT_MAPPING_CACHE
 
     try:
-        current_mtime = os.path.getmtime(mapping_path)
+        current_mtime = mapping_path.stat().st_mtime
         if current_mtime > _LAST_MAPPING_MTIME:
-            mapping_df = pd.read_excel(mapping_path, sheet_name='Sheet1')
-            file_mapping = dict(zip(mapping_df['部门'].astype(str), mapping_df['部门简称'].astype(str)))
-            # Merge: Default mapping + File mapping (File takes precedence)
+            mapping_df = pd.read_excel(mapping_path, sheet_name=0)
+            file_mapping = dict(
+                zip(mapping_df["部门"].astype(str), mapping_df["部门简称"].astype(str))
+            )
             combined = DEFAULT_DEPT_MAPPING.copy()
             combined.update(file_mapping)
             _DEPT_MAPPING_CACHE = combined
             _LAST_MAPPING_MTIME = current_mtime
             print(f"DEBUG: Department mapping reloaded (mtime: {current_mtime})")
-    except Exception as e:
-        print(f"Warning: Failed to load department mapping: {e}")
-    
+    except Exception as exc:
+        print(f"Warning: Failed to load department mapping: {exc}")
+
     return _DEPT_MAPPING_CACHE
 
+
 def parse_timesheet(file_path: str):
-    """
-    Parses the timesheet Excel file and returns a list of dictionaries for the DB.
-    Handles duplicate '合计' columns (O for Projects, R for Non-Projects).
-    """
     dept_mapping = load_dept_mapping()
     try:
-        # Read the first sheet
         df = pd.read_excel(file_path, sheet_name=0)
-        
-        # Get raw columns to detect duplicates and rename them
-        raw_cols = list(df.columns)
-        new_cols = []
-        heji_count = 0
-        for col in raw_cols:
-            c_name = str(col).strip()
-            if c_name == '合计':
-                if heji_count == 0:
-                    new_cols.append('合计_项目')
-                else:
-                    new_cols.append('合计_非项目')
-                heji_count += 1
-            else:
-                new_cols.append(c_name)
-        df.columns = new_cols
-        
-        required_cols = ['员工', '所属部门', '工号', '开始日期', '结束日期']
-        missing = [col for col in required_cols if col not in df.columns]
-        if missing:
-            raise ValueError(f"Excel文件中缺少以下必填列: {', '.join(missing)}。")
+        df.columns = _normalize_timesheet_columns(df.columns)
 
-        data_rows = []
+        required_columns = ["员工", "所属部门", "工号", "开始日期", "结束日期"]
+        missing_columns = [column for column in required_columns if column not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Excel文件中缺少以下必填列: {', '.join(missing_columns)}。")
+
+        entries = []
         for index, row in df.iterrows():
-            # Project vs Non-Project detection
-            proj_new = row.get('项目名称(新)', '')
-            proj_old = row.get('项目名称(作废)', '')
-            non_project_name = row.get('非项目名称', '')
-            
-            # 1. Check Project Name (New)
-            if not pd.isna(proj_new) and str(proj_new).strip() != "":
-                category = "Project"
-                display_name = str(proj_new).strip()
-                hours_val = row.get('合计_项目')
-            # 2. Check Project Name (Obsolete)
-            elif not pd.isna(proj_old) and str(proj_old).strip() != "":
-                category = "Project"
-                display_name = str(proj_old).strip()
-                hours_val = row.get('合计_项目')
-            # 3. Check Non-Project
-            elif not pd.isna(non_project_name) and str(non_project_name).strip() != "":
-                category = "Non-Project"
-                display_name = str(non_project_name).strip()
-                hours_val = row.get('合计_非项目')
-            else:
-                # Row has no identifier, skip
+            category, project_name, hours_value = _resolve_timesheet_identity(row)
+            if not project_name:
                 continue
 
-            # Basic validation for hours and employee
-            if pd.isna(row['员工']) or pd.isna(hours_val) or str(hours_val).strip() == "" or float(hours_val) == 0:
+            employee_name = _clean_text(row.get("员工"))
+            numeric_hours = pd.to_numeric(hours_value, errors="coerce")
+            if not employee_name or pd.isna(numeric_hours) or float(numeric_hours) == 0:
                 continue
 
-            # Date formatting with error handling
-            try:
-                start_date = row['开始日期']
-                end_date = row['结束日期']
-                
-                if pd.isna(start_date) or pd.isna(end_date):
-                    continue
+            start_date = _normalize_excel_date(row.get("开始日期"))
+            end_date = _normalize_excel_date(row.get("结束日期"))
+            if not start_date or not end_date:
+                continue
 
-                if isinstance(start_date, str):
-                    start_date = datetime.strptime(start_date.strip(), '%Y-%m-%d').date()
-                elif isinstance(start_date, datetime):
-                    start_date = start_date.date()
-                
-                if isinstance(end_date, str):
-                    end_date = datetime.strptime(end_date.strip(), '%Y-%m-%d').date()
-                elif isinstance(end_date, datetime):
-                    end_date = end_date.date()
-                
-                # Double check we actually have date objects
-                if not isinstance(start_date, date) or not isinstance(end_date, date):
-                    continue
-            except Exception as de:
-                print(f"Row {index} date error: {de}")
-                continue 
+            raw_department = _clean_text(row.get("所属部门"))
+            entries.append(
+                {
+                    "employee_name": employee_name,
+                    "employee_id": _clean_text(row.get("工号")),
+                    "department": _map_department_name(raw_department, dept_mapping),
+                    "department_full": raw_department,
+                    "position": _clean_text(row.get("职位")),
+                    "project_name": project_name,
+                    "category": category,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "hours": float(numeric_hours),
+                    "task_details": _clean_text(row.get("任务详情")),
+                    "approval_status": _clean_text(row.get("核准状态")),
+                    "current_node": _clean_text(row.get("当前节点")),
+                    "pending_approver": _clean_text(row.get("未操作者")),
+                }
+            )
 
-            # Apply department mapping
-            raw_dept = str(row['所属部门']).strip()
-            dept_name = dept_mapping.get(raw_dept, raw_dept)
+        return entries
+    except Exception as exc:
+        raise Exception(f"解析Excel失败: {exc}") from exc
 
-            entry = {
-                "employee_name": str(row['员工']).strip(),
-                "employee_id": str(row['工号']).strip(),
-                "department": dept_name,
-                "project_name": display_name,
-                "category": category,
-                "start_date": start_date,
-                "end_date": end_date,
-                "hours": float(hours_val),
-                "task_details": str(row.get('任务详情', '')).strip(),
-                "approval_status": str(row.get('核准状态', '')).strip(),
-                "current_node": str(row.get('当前节点', '') or '').strip(),
-                "pending_approver": str(row.get('未操作者', '') or '').strip()
-            }
-            data_rows.append(entry)
-            
-        return data_rows
-    except Exception as e:
-        raise Exception(f"解析Excel失败: {str(e)}")
+
+def _normalize_timesheet_columns(columns):
+    normalized_columns = []
+    heji_count = 0
+
+    for column in columns:
+        column_name = TIMESHEET_COLUMN_ALIASES.get(str(column).strip(), str(column).strip())
+        if column_name == "合计":
+            normalized_columns.append("合计_项目" if heji_count == 0 else "合计_非项目")
+            heji_count += 1
+        elif column_name == "合计.1":
+            normalized_columns.append("合计_非项目")
+        else:
+            normalized_columns.append(column_name)
+
+    return normalized_columns
+
+
+def _resolve_timesheet_identity(row):
+    project_new = _clean_text(row.get("项目名称(新)"))
+    if project_new:
+        return "Project", project_new, row.get("合计_项目")
+
+    project_legacy = _clean_text(row.get("项目名称(作废)"))
+    if project_legacy:
+        return "Project", project_legacy, row.get("合计_项目")
+
+    non_project_name = _clean_text(row.get("非项目名称"))
+    if non_project_name:
+        return "Non-Project", non_project_name, row.get("合计_非项目")
+
+    return None, None, None
+
+
+def _clean_text(value):
+    if value is None or pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
+def _map_department_name(raw_department, dept_mapping):
+    if not raw_department:
+        return ""
+    if raw_department in dept_mapping:
+        return dept_mapping[raw_department]
+
+    trimmed_department = re.sub(r"\s*\([^)]*\)\s*$", "", raw_department).strip()
+    if trimmed_department in dept_mapping:
+        return dept_mapping[trimmed_department]
+
+    for source_name, short_name in dept_mapping.items():
+        if raw_department.startswith(source_name) or trimmed_department.startswith(source_name):
+            return short_name
+
+    return raw_department
+
 
 def _normalize_excel_date(value):
     if pd.isna(value) or value in ("", None):
@@ -197,7 +213,7 @@ def _normalize_excel_date(value):
     if isinstance(value, date):
         return value
     if isinstance(value, str):
-        parsed = pd.to_datetime(value, errors='coerce')
+        parsed = pd.to_datetime(value, errors="coerce")
         if pd.isna(parsed):
             return None
         return parsed.date()
@@ -287,10 +303,9 @@ def parse_project_schedule(file_path: str):
 
 
 if __name__ == "__main__":
-    import os
-    test_path = r"d:\Antigravity\Project-timesheet\Timesheet Report-20260309172417(1).xlsx"
+    test_path = Path(__file__).resolve().parents[1] / "Timesheet Report-20260309172417(1).xlsx"
     if os.path.exists(test_path):
-        results = parse_timesheet(test_path)
+        results = parse_timesheet(str(test_path))
         print(f"Parsed {len(results)} rows successfully.")
         if results:
             print("Sample data (mapped dept):", results[0])
