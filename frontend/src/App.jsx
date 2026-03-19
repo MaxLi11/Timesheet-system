@@ -1646,11 +1646,19 @@ const App = () => {
       </header>
 
       <main className="main-content">
-        <header className={`page-hero ${activeTab === 'overview' ? 'page-hero-overview' : ''}`}>
-          <div className="page-intro-copy">
-            <p className="page-eyebrow">{pageMeta.eyebrow}</p>
-            <h1 className="page-title">{pageMeta.title}</h1>
-            <p className="page-summary">{pageMeta.description}</p>
+        <header className={`page-hero ${activeTab === 'overview' ? 'page-hero-overview' : ''}`} style={activeTab === 'custom_data' ? { gridTemplateColumns: '1fr' } : {}}>
+          <div className="page-intro-copy" style={activeTab === 'custom_data' ? { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } : {}}>
+            <div>
+              <p className="page-eyebrow">{pageMeta.eyebrow}</p>
+              <h1 className="page-title">{pageMeta.title}</h1>
+              <p className="page-summary">{pageMeta.description}</p>
+            </div>
+            {activeTab === 'custom_data' && (
+              <label className="export-btn" style={{ cursor: 'pointer', margin: 0, width: '220px', background: 'rgba(77, 114, 255, 0.12)', color: 'var(--primary)', border: '1px solid rgba(77, 114, 255, 0.25)', boxShadow: 'none' }}>
+                <FileDown size={16} /> {t.uploadWorkWeek}
+                <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
+              </label>
+            )}
 
             {activeTab === 'overview' && (
               <div className="hero-meta-row">
@@ -1670,14 +1678,7 @@ const App = () => {
             )}
           </div>
 
-          {activeTab === 'custom_data' ? (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
-              <label className="export-btn" style={{ cursor: 'pointer', margin: 0 }}>
-                <FileDown size={16} /> {t.uploadWorkWeek}
-                <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
-              </label>
-            </div>
-          ) : (
+          {activeTab !== 'custom_data' && (
             <div className="page-hero-panel">
               <div className="hero-panel-header">
                 <span>{uiText.currentView}</span>
@@ -1984,7 +1985,7 @@ const App = () => {
                   <h3 style={{ margin: 0 }}>{t.customDataTitle}</h3>
                   <p className="module-caption" style={{ marginTop: '8px' }}>{t.customDataSubtitle}</p>
                 </div>
-                <button type="button" className="export-btn" onClick={exportCustomProjectHoursExcel}>
+                <button type="button" className="export-btn" style={{ width: '220px' }} onClick={exportCustomProjectHoursExcel}>
                   <FileDown size={16} /> {t.exportCustomData}
                 </button>
               </div>
@@ -1997,7 +1998,7 @@ const App = () => {
                   <h3>{t.personMonthRatioTitle}</h3>
                   <p className="module-caption">{t.personMonthRatioSubtitle}</p>
                 </div>
-                <button type="button" className="export-btn" onClick={exportPersonMonthRatioExcel}>
+                <button type="button" className="export-btn" style={{ width: '220px' }} onClick={exportPersonMonthRatioExcel}>
                   <FileDown size={16} /> {t.exportPersonMonthRatio}
                 </button>
               </div>
