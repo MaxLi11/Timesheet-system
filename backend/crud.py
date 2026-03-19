@@ -274,3 +274,126 @@ def get_approval_rate(db: Session):
                 "project_name": e.project_name
             })
     return result
+
+
+# ── 工作周划分 ──────────────────────────────────────────────
+
+def save_work_weeks(db: Session, weeks: list):
+    """整表替换工作周划分数据"""
+    db.query(database.WorkWeek).delete()
+    db.flush()
+    for w in weeks:
+        db.add(database.WorkWeek(
+            week_start=w["week_start"],
+            week_end=w["week_end"],
+            week_code=w["week_code"],
+            work_month=w["work_month"],
+        ))
+    db.commit()
+    return {"weeks_processed": len(weeks)}
+
+
+def _build_week_to_month_map(db: Session) -> dict:
+    """返回 {week_start_date: 'YYYY-MM'} 的字典，用于快速查月份"""
+    rows = db.query(database.WorkWeek).all()
+    return {row.week_start: row.work_month for row in rows}
+
+
+# ── 人月占比计算 ────────────────────────────────────────────
+
+_NON_PROJECT_INCLUDE = {"management", "others", "training"}
+
+
+def get_person_month_ratio(db: Session):
+    """
+    计算每个项目每位员工每月的工时占比。
+    只统计 current_node == Close 的记录。
+    月份归属：优先查工作周划分表，查不到则用开始日期自然月。
+    """
+    week_map = _build_week_to_month_map(db)
+
+    entries = db.query(database.TimeEntry).filter(
+        func.lower(database.TimeEntry.current_node) == "close"
+    ).all()
+
+    def resolve_month(start_date) -> str:
+        if start_date and start_date in week_map:
+            return week_map[start_date]
+        if start_date:
+            return start_date.strftime("%Y-%m")
+        return ""
+
+    # 第一步：统计每位员工每月的总工时
+    # key: (employee_name, month)  value: total_hours
+    employee_month_total: dict = {}
+
+    for e in entries:
+        month = resolve_month(e.start_date)
+        if not month:
+            continue
+        key = (e.employee_name, month)
+        hours = float(e.hours or 0)
+
+        if e.category == "Project":
+            employee_month_total[key] = employee_month_total.get(key, 0) + hours
+        elif e.category == "Non-Project":
+            proj = str(e.project_name or "").strip().lower()
+            if proj in _NON_PROJECT_INCLUDE:
+                employee_month_total[key] = employee_month_total.get(key, 0) + hours
+
+    # 第二步：统计每个项目每位员工每月的工时
+    # key: (project_name, employee_name, month)  value: hours
+    project_employee_month: dict = {}
+    employee_meta: dict = {}  # employee_name -> {department_full, department, position}
+
+    for e in entries:
+        if e.category != "Project":
+            continue
+        month = resolve_month(e.start_date)
+        if not month:
+            continue
+        key = (e.project_name, e.employee_name, month)
+        project_employee_month[key] = project_employee_month.get(key, 0) + float(e.hours or 0)
+
+        if e.employee_name not in employee_meta:
+            employee_meta[e.employee_name] = {
+                "department_full": e.department_full or "",
+                "department": e.department or "",
+                "position": e.position or "",
+            }
+        else:
+            meta = employee_meta[e.employee_name]
+            if not meta["department_full"] and e.department_full:
+                meta["department_full"] = e.department_full
+            if not meta["department"] and e.department:
+                meta["department"] = e.department
+            if not meta["position"] and e.position:
+                meta["position"] = e.position
+
+    # 第三步：计算占比，组装结果
+    # 按 project_name, employee_name 分组，月份作为动态列
+    result_map: dict = {}  # (project, employee) -> row dict
+
+    for (project, employee, month), proj_hours in project_employee_month.items():
+        total = employee_month_total.get((employee, month), 0)
+        ratio = round(proj_hours / total, 6) if total > 0 else 0
+
+        row_key = (project, employee)
+        if row_key not in result_map:
+            meta = employee_meta.get(employee, {})
+            result_map[row_key] = {
+                "project_name": project,
+                "employee_name": employee,
+                "department_full": meta.get("department_full", ""),
+                "department": meta.get("department", ""),
+                "position": meta.get("position", ""),
+                "months": {},
+            }
+        result_map[row_key]["months"][month] = ratio
+
+    # 收集所有月份并排序
+    all_months = sorted({m for (_, _, m) in project_employee_month.keys()})
+
+    rows = sorted(result_map.values(), key=lambda r: (r["project_name"], r["employee_name"]))
+
+    return {"months": all_months, "rows": rows}

@@ -159,3 +159,40 @@ def get_project_schedule_analysis(db: Session = Depends(get_db)):
     Returns aggregated project schedule monitoring data for the project analysis page.
     """
     return crud.get_project_schedule_analysis(db)
+
+
+@app.post("/upload-work-week")
+async def upload_work_week(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    上传工作周划分 Excel，整表替换。
+    """
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="请上传 Excel 文件。")
+
+    temp_path = _store_uploaded_file_temporarily(file)
+    try:
+        weeks = parser.parse_work_week(temp_path)
+        if not weeks:
+            raise HTTPException(status_code=400, detail="未能从文件中解析到有效的工作周数据。")
+        result = crud.save_work_weeks(db, weeks)
+        return {"message": "上传成功", **result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception as e:
+                print(f"Error removing temporary file {temp_path}: {e}")
+
+
+@app.get("/person-month-ratio")
+def get_person_month_ratio(db: Session = Depends(get_db)):
+    """
+    返回每个项目每位员工每月的工时占比数据。
+    月份归属优先查工作周划分表，查不到则用自然月。
+    """
+    return crud.get_person_month_ratio(db)

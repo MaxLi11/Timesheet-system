@@ -302,7 +302,67 @@ def parse_project_schedule(file_path: str):
     return parsed_projects
 
 
+def parse_work_week(file_path: str):
+    """
+    解析工作周划分 Excel 文件。
+    返回列表，每项包含：week_start, week_end, week_code, work_month（格式 YYYY-MM）
+    """
+    try:
+        df = pd.read_excel(file_path, sheet_name=0, header=None)
+    except Exception as exc:
+        raise Exception(f"读取工作周划分文件失败: {exc}") from exc
+
+    # 第0行是表头，从第1行开始是数据
+    results = []
+    current_month_label = None  # 例如 "1月"
+    current_year = None
+
+    for row_index in range(1, len(df)):
+        row = df.iloc[row_index]
+        week_start = _normalize_excel_date(row.iloc[0])
+        week_end = _normalize_excel_date(row.iloc[1])
+        week_code = str(row.iloc[2]).strip() if pd.notna(row.iloc[2]) else ""
+
+        if not week_start or not week_end or not week_code:
+            continue
+
+        # 从 week_code 推断年份，例如 "202601-W1" -> 2026
+        year_from_code = int(week_code[:4]) if len(week_code) >= 4 else None
+
+        # 工作月份列（第4列），只有每月第一周才有值
+        month_label = str(row.iloc[4]).strip() if pd.notna(row.iloc[4]) else ""
+        if month_label and month_label != "nan":
+            current_month_label = month_label
+            current_year = year_from_code
+
+        # 把 "1月" 转成 "2026-01"
+        work_month = _month_label_to_key(current_month_label, current_year)
+        if not work_month:
+            continue
+
+        results.append({
+            "week_start": week_start,
+            "week_end": week_end,
+            "week_code": week_code,
+            "work_month": work_month,
+        })
+
+    return results
+
+
+def _month_label_to_key(label: str, year: int) -> str:
+    """把 '3月' + 2026 转成 '2026-03'"""
+    if not label or not year:
+        return ""
+    try:
+        month_num = int(str(label).replace("月", "").strip())
+        return f"{year}-{month_num:02d}"
+    except (ValueError, AttributeError):
+        return ""
+
+
 if __name__ == "__main__":
+
     test_path = Path(__file__).resolve().parents[1] / "Timesheet Report-20260309172417(1).xlsx"
     if os.path.exists(test_path):
         results = parse_timesheet(str(test_path))

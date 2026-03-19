@@ -858,6 +858,13 @@ const App = () => {
   t.customDataProjects = lang === 'zh' ? '项目数' : 'Projects';
   t.customDataEmployees = lang === 'zh' ? '员工行数' : 'Employee Rows';
   t.customDataMonths = lang === 'zh' ? '月份列数' : 'Month Columns';
+  t.uploadWorkWeek = lang === 'zh' ? '上传工作周划分' : 'Upload Work Week';
+  t.workWeekUploadSuccess = lang === 'zh' ? '工作周划分上传成功，已处理周数：' : 'Work week upload success, weeks processed:';
+  t.exportPersonMonthRatio = lang === 'zh' ? '导出人月占比' : 'Export Person-Month Ratio';
+  t.personMonthRatioTitle = lang === 'zh' ? '人月占比导出' : 'Person-Month Ratio Export';
+  t.personMonthRatioSubtitle = lang === 'zh'
+    ? '按项目 + Close 口径，计算每位员工每月工时占比（需先上传工作周划分文件）。'
+    : 'Per-project Close-scoped monthly ratio per employee. Requires work week file upload.';
 
   const uiText = {
     zh: {
@@ -1033,6 +1040,53 @@ const App = () => {
       alert(`${t.uploadFailed}: ${err.message}`);
     } finally {
       e.target.value = '';
+    }
+  };
+
+  const handleWorkWeekUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch(`${API_BASE_URL}/upload-work-week`, { method: 'POST', body: formData });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail || result.message || 'Upload failed');
+      alert(`${t.workWeekUploadSuccess} ${result.weeks_processed}`);
+    } catch (err) {
+      alert(`${t.uploadFailed}: ${err.message}`);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const exportPersonMonthRatioExcel = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/person-month-ratio`);
+      if (!res.ok) throw new Error('获取数据失败');
+      const { months, rows } = await res.json();
+      if (!rows || rows.length === 0) {
+        alert('暂无数据，请先上传工时表和工作周划分文件。');
+        return;
+      }
+      const headers = ['项目名称', '员工', '所属部门', '部门简称', '职位', ...months];
+      const sheetRows = rows.map(r => [
+        r.project_name,
+        r.employee_name,
+        r.department_full,
+        r.department,
+        r.position,
+        ...months.map(m => r.months[m] ?? 0),
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...sheetRows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '人月占比');
+      const now = new Date();
+      const pad = v => String(v).padStart(2, '0');
+      const filename = `人月占比_Close口径_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}.xlsx`;
+      XLSX.writeFile(wb, filename);
+    } catch (err) {
+      alert(`导出失败: ${err.message}`);
     }
   };
 
@@ -1921,31 +1975,30 @@ const App = () => {
                   <h3>{t.customDataTitle}</h3>
                   <p className="module-caption">{t.customDataSubtitle}</p>
                 </div>
-                <button type="button" className="export-btn" onClick={exportCustomProjectHoursExcel}>
-                  <FileDown size={16} /> {t.exportCustomData}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="button" className="export-btn" onClick={exportCustomProjectHoursExcel}>
+                    <FileDown size={16} /> {t.exportCustomData}
+                  </button>
+                  <label className="export-btn" style={{ cursor: 'pointer' }}>
+                    <FileDown size={16} /> {t.uploadWorkWeek}
+                    <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleWorkWeekUpload} />
+                  </label>
+                </div>
+              </div>
+
+
+            </div>
+
+            {/* 人月占比导出 */}
+            <div className="card custom-data-card elevated-module">
+              <div className="card-heading-row">
+                <div>
+                  <h3>{t.personMonthRatioTitle}</h3>
+                  <p className="module-caption">{t.personMonthRatioSubtitle}</p>
+                </div>
+                <button type="button" className="export-btn" onClick={exportPersonMonthRatioExcel}>
+                  <FileDown size={16} /> {t.exportPersonMonthRatio}
                 </button>
-              </div>
-
-              <div className="custom-data-summary-grid">
-                <div className="hero-panel-stat">
-                  <span>{t.customDataProjects}</span>
-                  <strong>{customDataPreview.projectCount}</strong>
-                </div>
-                <div className="hero-panel-stat">
-                  <span>{t.customDataEmployees}</span>
-                  <strong>{customDataPreview.employeeCount}</strong>
-                </div>
-                <div className="hero-panel-stat">
-                  <span>{t.customDataMonths}</span>
-                  <strong>{customDataPreview.monthCount}</strong>
-                </div>
-              </div>
-
-              <div className="custom-data-note">
-                <p>{t.customDataScope}</p>
-                <p className="module-caption">
-                  {customDataHasMissingMeta ? t.customDataReuploadHint : t.customDataSubtitle}
-                </p>
               </div>
             </div>
           </div>

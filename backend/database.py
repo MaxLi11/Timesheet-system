@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import Column, Date, Float, ForeignKey, Integer, String, create_engine, inspect, text
+from sqlalchemy import Column, Date, Float, ForeignKey, Integer, String, create_engine, inspect, text, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
@@ -84,6 +84,18 @@ class ProjectScheduleMilestone(Base):
     delta_days = Column(Float)
 
     project = relationship("ProjectSchedule", back_populates="milestones")
+
+
+class WorkWeek(Base):
+    __tablename__ = "work_weeks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    week_start = Column(Date, nullable=False)
+    week_end = Column(Date, nullable=False)
+    week_code = Column(String, nullable=False)  # e.g. "202601-W1"
+    work_month = Column(String, nullable=False)  # e.g. "2026-01"
+
+    __table_args__ = (UniqueConstraint("week_start", name="uq_work_weeks_week_start"),)
 
 
 def init_db():
