@@ -368,14 +368,16 @@ const buildScheduleMonthScale = (dateValues) => {
 
   return {
     monthLabels: monthStarts.map(monthStart => monthStart.format('YYYY-MM')),
-    getDateIndex: (value) => {
+    min: -0.5,
+    max: Math.max(monthStarts.length - 0.5, 0.5),
+    toAxisValue: (value) => {
       if (!value) return null;
       const date = dayjs(value);
       if (!date.isValid()) return null;
       const monthIndex = monthIndexMap.get(date.format('YYYY-MM'));
       if (monthIndex === undefined) return null;
-      const dayFraction = (date.date() - 1) / date.daysInMonth();
-      return monthIndex + dayFraction;
+      const dayFraction = (date.date() - 0.5) / date.daysInMonth();
+      return monthIndex - 0.5 + Math.min(Math.max(dayFraction, 0), 1);
     }
   };
 };
@@ -420,10 +422,10 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
     ])
   );
   const milestoneProgressData = milestones.map((milestone, index) => {
-    const plannedValue = monthScale.getDateIndex(milestone.planned_date);
-    const actualValue = monthScale.getDateIndex(milestone.actual_date);
-    const anchorValue = plannedValue ?? actualValue ?? 0;
-    const pendingValue = actualValue ?? Math.min(monthScale.monthLabels.length - 1, anchorValue + 0.5);
+    const plannedValue = monthScale.toAxisValue(milestone.planned_date);
+    const actualValue = monthScale.toAxisValue(milestone.actual_date);
+    const anchorValue = plannedValue ?? actualValue ?? Math.max(monthScale.min + 0.16, monthScale.max - 0.16);
+    const pendingValue = actualValue ?? Math.min(monthScale.max - 0.08, anchorValue + 0.18);
 
     return {
       value: [plannedValue ?? anchorValue, actualValue ?? pendingValue, index],
@@ -436,110 +438,125 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
     };
   });
 
-  // 构建节点进度条数据
-  const milestoneProgressBars = milestones.map((milestone, index) => ({
-    name: milestone.name,
-    plannedIndex: monthScale.getDateIndex(milestone.planned_date),
-    actualIndex: monthScale.getDateIndex(milestone.actual_date),
-    plannedDate: milestone.planned_date,
-    actualDate: milestone.actual_date,
-    yPosition: index,
-    hasPlanned: Boolean(milestone.planned_date),
-    hasActual: Boolean(milestone.actual_date)
-  }));
-
   const series = [
     ...departments.map((department, index) => ({
       name: department,
       type: 'bar',
       stack: 'monthly-hours',
+      xAxisIndex: 0,
+      yAxisIndex: 0,
       barMaxWidth: 28,
       itemStyle: {
         color: EDITORIAL_THEME.palette[index % EDITORIAL_THEME.palette.length],
         borderRadius: [8, 8, 0, 0]
       },
       emphasis: { focus: 'series' },
-      data: monthScale.monthLabels.map(label =>
+      data: monthScale.monthLabels.map((label, idx) => [
+        idx,
         Number((monthlySeriesMaps.get(department)?.get(label) || 0).toFixed(1))
-      )
+      ])
     })),
     {
+      name: t.milestoneProgress,
       type: 'custom',
-      name: lang === 'zh' ? '节点进度' : 'Milestone Progress',
+      xAxisIndex: 1,
       yAxisIndex: 1,
+      data: milestoneProgressData,
       renderItem: (params, api) => {
-        const bar = milestoneProgressBars[params.dataIndex];
-        if (!bar) return null;
+        const item = milestoneProgressData[params.dataIndex];
+        const rowIndex = api.value(2);
+        const rowCoord = api.coord([monthScale.min, rowIndex]);
+        const plannedCoord = item.hasPlannedDate ? api.coord([api.value(0), rowIndex]) : null;
+        const actualCoord = item.hasActualDate ? api.coord([api.value(1), rowIndex]) : null;
+        const pendingCoord = !item.hasActualDate ? api.coord([api.value(1), rowIndex]) : null;
+        const trackStartX = plannedCoord?.[0] ?? actualCoord?.[0] ?? pendingCoord?.[0] ?? rowCoord[0];
+        const trackEndX = actualCoord?.[0] ?? pendingCoord?.[0] ?? trackStartX;
+        const left = Math.min(trackStartX, trackEndX);
+        const right = Math.max(trackStartX, trackEndX);
+        const trackHeight = Math.max(7, Math.min(12, api.size([0, 1])[1] * 0.26));
+        const trackWidth = Math.max(right - left, item.hasActualDate ? 4 : 16);
+        const y = rowCoord[1] - trackHeight / 2;
+        const lineHeight = Math.max(12, Math.min(22, api.size([0, 1])[1] * 0.64));
+        const lineTop = rowCoord[1] - lineHeight / 2;
+        const lineBottom = rowCoord[1] + lineHeight / 2;
+        const labelText = item.hasActualDate ? item.actualDateLabel : item.pendingLabel;
+        const labelX = (actualCoord?.[0] ?? pendingCoord?.[0] ?? right) + 7;
 
-        const barHeight = 6;
-        const children = [];
-
-        // 使用第二个Y轴的坐标系统
-        const yCoord = api.coord([0, bar.yPosition])[1];
-
-        // 计算X坐标
-        const plannedCoord = bar.hasPlanned ? api.coord([bar.plannedIndex, bar.yPosition]) : null;
-        const actualCoord = bar.hasActual ? api.coord([bar.actualIndex, bar.yPosition]) : null;
-
-        // 绘制背景横条
-        if (plannedCoord && actualCoord) {
-          const startX = Math.min(plannedCoord[0], actualCoord[0]);
-          const endX = Math.max(plannedCoord[0], actualCoord[0]);
-          children.push({
-            type: 'rect',
-            shape: { x: startX, y: yCoord - barHeight / 2, width: endX - startX, height: barHeight, r: barHeight / 2 },
-            style: { fill: 'rgba(140, 156, 184, 0.15)', stroke: 'rgba(126, 145, 175, 0.3)', lineWidth: 1 },
-            blur: { style: { opacity: 1 } }
-          });
-        }
-
-        // 预计时间标记
-        if (plannedCoord) {
-          children.push({
-            type: 'circle',
-            shape: { cx: plannedCoord[0], cy: yCoord, r: 4 },
-            style: { fill: SCHEDULE_SERIES_COLORS.planned, stroke: '#fff', lineWidth: 1.5 },
-            blur: { style: { opacity: 1 } }
-          });
-          children.push({
-            type: 'text',
-            style: {
-              x: plannedCoord[0],
-              y: yCoord - 10,
-              text: formatCompactScheduleDate(bar.plannedDate),
-              fill: SCHEDULE_SERIES_COLORS.planned,
-              font: '700 9px "IBM Plex Sans", sans-serif',
-              textAlign: 'center'
+        return {
+          type: 'group',
+          children: [
+            {
+              type: 'rect',
+              shape: {
+                x: left,
+                y,
+                width: trackWidth,
+                height: trackHeight,
+                r: trackHeight / 2
+              },
+              style: {
+                fill: item.hasActualDate ? 'rgba(140, 156, 184, 0.12)' : 'rgba(255, 139, 75, 0.08)',
+                stroke: item.hasActualDate ? 'rgba(126, 145, 175, 0.26)' : 'rgba(255, 139, 75, 0.34)',
+                lineWidth: 1,
+                lineDash: item.hasActualDate ? undefined : [4, 3]
+              }
             },
-            blur: { style: { opacity: 1 } }
-          });
-        }
-
-        // 实际时间标记
-        if (actualCoord) {
-          children.push({
-            type: 'circle',
-            shape: { cx: actualCoord[0], cy: yCoord, r: 4 },
-            style: { fill: SCHEDULE_SERIES_COLORS.actual, stroke: '#fff', lineWidth: 1.5 },
-            blur: { style: { opacity: 1 } }
-          });
-          children.push({
-            type: 'text',
-            style: {
-              x: actualCoord[0],
-              y: yCoord - 10,
-              text: formatCompactScheduleDate(bar.actualDate),
-              fill: SCHEDULE_SERIES_COLORS.actual,
-              font: '700 9px "IBM Plex Sans", sans-serif',
-              textAlign: 'center'
-            },
-            blur: { style: { opacity: 1 } }
-          });
-        }
-
-        return { type: 'group', children };
+            ...(plannedCoord ? [{
+              type: 'line',
+              shape: {
+                x1: plannedCoord[0],
+                y1: lineTop,
+                x2: plannedCoord[0],
+                y2: lineBottom
+              },
+              style: {
+                stroke: SCHEDULE_SERIES_COLORS.planned,
+                lineWidth: 2,
+                opacity: 0.92
+              }
+            }] : []),
+            ...(actualCoord ? [{
+              type: 'line',
+              shape: {
+                x1: actualCoord[0],
+                y1: lineTop - 1,
+                x2: actualCoord[0],
+                y2: lineBottom + 1
+              },
+              style: {
+                stroke: SCHEDULE_SERIES_COLORS.actual,
+                lineWidth: 3,
+                shadowBlur: 10,
+                shadowColor: 'rgba(77, 114, 255, 0.22)'
+              }
+            }] : pendingCoord ? [{
+              type: 'line',
+              shape: {
+                x1: pendingCoord[0],
+                y1: lineTop,
+                x2: pendingCoord[0],
+                y2: lineBottom
+              },
+              style: {
+                stroke: SCHEDULE_SERIES_COLORS.pending,
+                lineWidth: 2,
+                lineDash: [4, 3],
+                opacity: 0.92
+              }
+            }] : []),
+            ...(labelText ? [{
+              type: 'text',
+              style: {
+                x: labelX,
+                y: rowCoord[1] - 6,
+                text: labelText,
+                fill: item.hasActualDate ? SCHEDULE_SERIES_COLORS.actual : SCHEDULE_SERIES_COLORS.pending,
+                font: '700 10px "IBM Plex Sans", "Noto Sans SC", sans-serif'
+              }
+            }] : [])
+          ]
+        };
       },
-      data: milestoneProgressBars,
       z: 100
     }
   ];
@@ -551,9 +568,10 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
       show: hasMonthlyHours,
       data: departments,
       type: 'scroll',
-      orient: 'horizontal',
-      bottom: 10,
+      top: 206,
       left: 'center',
+      right: 'auto',
+      bottom: 'auto',
       itemGap: 14,
       textStyle: chartText
     },
@@ -585,22 +603,45 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         `;
       }
     },
-    grid: { left: 110, right: 180, top: 40, bottom: 80 },
-    xAxis: {
-      type: 'category',
-      position: 'top',
-      data: monthScale.monthLabels,
-      axisLabel: {
-        ...chartAxis,
-        fontSize: 10.5,
-        formatter: (value) => formatScheduleMonthLabel(value)
+    grid: [
+      { left: 110, right: 132, top: 40, height: 176 },
+      { left: 110, right: 132, top: 242, height: 240 }
+    ],
+    xAxis: [
+      {
+        gridIndex: 0,
+        type: 'value',
+        position: 'top',
+        min: monthScale.min,
+        max: monthScale.max,
+        interval: 1,
+        axisLabel: {
+          ...chartAxis,
+          fontSize: 10.5,
+          formatter: (value) => {
+            const index = Math.round(value);
+            return formatScheduleMonthLabel(monthScale.monthLabels[index] || '');
+          }
+        },
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: EDITORIAL_THEME.border } },
+        splitLine: chartSplitLine
       },
-      axisTick: { show: false },
-      axisLine: { lineStyle: { color: EDITORIAL_THEME.border } },
-      splitLine: chartSplitLine
-    },
+      {
+        gridIndex: 1,
+        type: 'value',
+        min: monthScale.min,
+        max: monthScale.max,
+        interval: 1,
+        axisLabel: { show: false },
+        axisTick: { show: false },
+        axisLine: { show: false },
+        splitLine: { show: false }
+      }
+    ],
     yAxis: [
       {
+        gridIndex: 0,
         type: 'value',
         min: 0,
         axisLabel: {
@@ -610,13 +651,16 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
         splitLine: chartSplitLine
       },
       {
+        gridIndex: 1,
         type: 'category',
         position: 'right',
-        data: milestones.map(m => m.name),
+        data: milestones.map(milestone => milestone.name),
         inverse: true,
         axisLabel: {
           ...chartAxis,
-          fontSize: 9
+          fontSize: 9,
+          width: 92,
+          overflow: 'truncate'
         },
         axisTick: { show: false },
         axisLine: { show: false }
