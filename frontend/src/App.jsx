@@ -462,6 +462,134 @@ const buildProjectScheduleChartOption = (project, lang, t, timesheetEntries = []
   };
 };
 
+// ── 项目节点区间工时堆积图 ────────────────────────────────────────────────────
+const buildMilestoneIntervalChartOption = (project, lang, t) => {
+  const milestones = project?.milestones || [];
+  const intervals  = project?.intervals  || [];
+
+  // 收集所有部门并按总工时降序排列
+  const deptTotals = new Map();
+  intervals.forEach(iv =>
+    (iv.department_shares || []).forEach(d => {
+      deptTotals.set(d.department, (deptTotals.get(d.department) || 0) + d.hours);
+    })
+  );
+  const departments = [...deptTotals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(e => e[0]);
+
+  // to_milestone → interval 索引
+  const ivByTarget = new Map(intervals.map(iv => [iv.to_milestone, iv]));
+
+  const hasAnyHours = intervals.some(iv => (iv.total_hours || 0) > 0);
+
+  // Y 轴标签：节点名 | 实际日期（用 | 分割给 rich formatter 解析）
+  const yLabels = milestones.map(m => {
+    const dateStr = m.actual_date
+      ? dayjs(m.actual_date).format('YYYY/MM/DD')
+      : (lang === 'zh' ? '待完成' : 'Pending');
+    return `${m.name}|${dateStr}`;
+  });
+
+  const series = departments.map((dept, idx) => ({
+    name: dept,
+    type: 'bar',
+    stack: 'ms-hours',
+    barMaxWidth: 24,
+    itemStyle: {
+      color: EDITORIAL_THEME.palette[idx % EDITORIAL_THEME.palette.length],
+      borderRadius: [0, 4, 4, 0]
+    },
+    emphasis: { focus: 'series' },
+    data: milestones.map(m => {
+      const iv = ivByTarget.get(m.name);
+      if (!iv) return 0;
+      const share = (iv.department_shares || []).find(d => d.department === dept);
+      return share ? Number(share.hours.toFixed(1)) : 0;
+    })
+  }));
+
+  return {
+    color: EDITORIAL_THEME.palette,
+    animationDuration: 450,
+    legend: {
+      show: hasAnyHours && departments.length > 0,
+      data: departments,
+      type: 'scroll',
+      bottom: 6,
+      left: 'center',
+      itemGap: 14,
+      textStyle: chartText
+    },
+    tooltip: {
+      ...tooltipBase,
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        if (!Array.isArray(params) || !params.length) return '';
+        const idx = params[0].dataIndex;
+        const milestone = milestones[idx];
+        const iv = ivByTarget.get(milestone?.name);
+        const total = iv?.total_hours || 0;
+        const dateStr = milestone?.actual_date
+          ? dayjs(milestone.actual_date).format('YYYY-MM-DD')
+          : (lang === 'zh' ? '待完成' : 'Pending');
+        let html = `<div style="font-weight:800;margin-bottom:4px;">${milestone?.name || ''}</div>`;
+        html += `<div style="font-size:11px;color:#8a9bba;margin-bottom:6px;">${dateStr}</div>`;
+        params.filter(p => Number(p.value) > 0).forEach(p => {
+          html += `<div style="display:flex;justify-content:space-between;gap:14px;"><span>${p.marker} ${p.seriesName}</span><strong>${formatScheduleNumber(p.value)}h</strong></div>`;
+        });
+        if (total > 0) {
+          html += `<div style="border-top:1px solid #eee;margin-top:4px;padding-top:4px;display:flex;justify-content:space-between;gap:14px;"><span>${lang === 'zh' ? '区间合计' : 'Interval Total'}</span><strong>${formatScheduleNumber(total)}h</strong></div>`;
+        } else {
+          html += `<div style="color:#9aabc6;font-size:11px;margin-top:4px;">${lang === 'zh' ? '暂无 Close 工时' : 'No Close hours'}</div>`;
+        }
+        return html;
+      }
+    },
+    grid: { left: 172, right: 24, top: 16, bottom: 54 },
+    xAxis: {
+      type: 'value',
+      axisLabel: { ...chartAxis, formatter: v => `${v}h` },
+      splitLine: chartSplitLine
+    },
+    yAxis: {
+      type: 'category',
+      data: yLabels,
+      inverse: true,
+      axisLabel: {
+        ...chartAxis,
+        fontSize: 11,
+        width: 162,
+        overflow: 'truncate',
+        lineHeight: 15,
+        formatter: (value) => {
+          const [name, date] = value.split('|');
+          return `{nm|${name}}\n{dt|${date}}`;
+        },
+        rich: {
+          nm: { fontSize: 11, fontWeight: 700, color: EDITORIAL_THEME.graphite, lineHeight: 16 },
+          dt: { fontSize: 10, color: EDITORIAL_THEME.slateSoft, lineHeight: 14 }
+        }
+      },
+      axisTick: { show: false },
+      axisLine: { show: false }
+    },
+    series,
+    graphic: hasAnyHours ? [] : [{
+      type: 'text',
+      left: 'center',
+      top: 'middle',
+      style: {
+        text: t.scheduleHoursEmpty,
+        fill: EDITORIAL_THEME.slateSoft,
+        font: '600 12px "IBM Plex Sans","Noto Sans SC",sans-serif',
+        textAlign: 'center'
+      }
+    }]
+  };
+};
+
 const App = () => {
   const isEmbed = useMemo(() => new URLSearchParams(window.location.search).get('embed') === 'true', []);
   const [data, setData] = useState([]);
@@ -494,6 +622,7 @@ const App = () => {
   const [projectScheduleData, setProjectScheduleData] = useState({ projects: [] });
   const [scheduleSelectedProjects, setScheduleSelectedProjects] = useState(new Set());
   const [scheduleProjectPickerOpen, setScheduleProjectPickerOpen] = useState(false);
+  const [scheduleChartMode, setScheduleChartMode] = useState('monthly'); // 'monthly' | 'milestone'
   const scheduleProjectPickerRef = useRef(null);
 
   const t = {
@@ -546,7 +675,9 @@ const App = () => {
       milestoneTimeline: '节点计划 / 实际时间线',
       intervalShare: '节点区间部门工时占比',
       intervalNoHours: '当前可用区间内暂时没有 Close 工时',
-      filterScheduleProjects: '选择项目（可多选）'
+      filterScheduleProjects: '选择项目（可多选）',
+      chartModeMonthly: '月度工时',
+      chartModeMilestone: '节点工时占比'
     },
     en: {
       dashboard: 'Dashboard', stats: 'Statistics', activity: 'Activity',
@@ -600,7 +731,9 @@ const App = () => {
       milestoneTimeline: 'Milestone Planned / Actual Timeline',
       intervalShare: 'Department Share by Milestone Interval',
       intervalNoHours: 'No Close hours are available in the current milestone intervals.',
-      filterScheduleProjects: 'Select Projects (multi-select)'
+      filterScheduleProjects: 'Select Projects (multi-select)',
+      chartModeMonthly: 'Monthly Hours',
+      chartModeMilestone: 'Milestone Hours'
     }
   }[lang];
 
@@ -1225,6 +1358,14 @@ const App = () => {
     return chartMap;
   }, [data, lang, scheduleProjects, t]);
 
+  const milestoneChartOptions = useMemo(() => {
+    const chartMap = new Map();
+    scheduleProjects.forEach(project => {
+      chartMap.set(project.project_name, buildMilestoneIntervalChartOption(project, lang, t));
+    });
+    return chartMap;
+  }, [lang, scheduleProjects, t]);
+
   const toggleScheduleProject = (projectName) => {
     setScheduleSelectedProjects(prev => {
       const next = new Set(prev);
@@ -1449,52 +1590,72 @@ const App = () => {
                 </label>
               </div>
             ) : activeTab === 'project_analysis' ? (
-              <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'flex-end', gap: '0.78rem', width: '100%', position: 'relative', zIndex: 10 }}>
-                <label className="utility-upload schedule-upload-control" style={{ margin: 0, flexShrink: 0 }}>
-                  <Upload size={18} />
-                  <span>{t.uploadProjectSchedule}</span>
-                  <input type="file" hidden onChange={handleProjectScheduleUpload} />
-                </label>
-                <div className="filter-group dropdown-container" ref={scheduleProjectPickerRef} style={{ marginLeft: 0, flexShrink: 0 }}>
-                  <label>{t.filterScheduleProjects}</label>
-                  <button
-                    type="button"
-                    className="dropdown-button"
-                    onClick={() => setScheduleProjectPickerOpen(prev => !prev)}
-                  >
-                    {scheduleSelectedProjects.size === 0
-                      ? t.allScheduleProjects
-                      : (lang === 'zh' ? `已选 ${scheduleSelectedProjects.size} 个` : `${scheduleSelectedProjects.size} selected`)}
-                    <ChevronDown size={16} />
-                  </button>
-                  {scheduleProjectPickerOpen && (
-                    <div className="approval-project-panel">
-                      <div className="project-panel-header">
-                        <span className="filter-group-label">{t.filterScheduleProjects}</span>
-                        <div className="project-panel-btns">
-                          <button type="button" onClick={() => setScheduleSelectedProjects(new Set(scheduleProjects.map(project => project.project_name)))}>
-                            {t.selectAll}
-                          </button>
-                          <button type="button" onClick={() => setScheduleSelectedProjects(new Set())}>
-                            {t.clearAll}
-                          </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.88rem', width: '100%', position: 'relative', zIndex: 10 }}>
+                {/* 第一行：上传按钮 + 项目筛选 */}
+                <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'flex-end', gap: '0.78rem' }}>
+                  <label className="utility-upload schedule-upload-control" style={{ margin: 0, flexShrink: 0 }}>
+                    <Upload size={18} />
+                    <span>{t.uploadProjectSchedule}</span>
+                    <input type="file" hidden onChange={handleProjectScheduleUpload} />
+                  </label>
+                  <div className="filter-group dropdown-container" ref={scheduleProjectPickerRef} style={{ marginLeft: 0, flexShrink: 0 }}>
+                    <label>{t.filterScheduleProjects}</label>
+                    <button
+                      type="button"
+                      className="dropdown-button"
+                      onClick={() => setScheduleProjectPickerOpen(prev => !prev)}
+                    >
+                      {scheduleSelectedProjects.size === 0
+                        ? t.allScheduleProjects
+                        : (lang === 'zh' ? `已选 ${scheduleSelectedProjects.size} 个` : `${scheduleSelectedProjects.size} selected`)}
+                      <ChevronDown size={16} />
+                    </button>
+                    {scheduleProjectPickerOpen && (
+                      <div className="approval-project-panel">
+                        <div className="project-panel-header">
+                          <span className="filter-group-label">{t.filterScheduleProjects}</span>
+                          <div className="project-panel-btns">
+                            <button type="button" onClick={() => setScheduleSelectedProjects(new Set(scheduleProjects.map(project => project.project_name)))}>
+                              {t.selectAll}
+                            </button>
+                            <button type="button" onClick={() => setScheduleSelectedProjects(new Set())}>
+                              {t.clearAll}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="project-checkboxes">
+                          {scheduleProjects.map(project => (
+                            <label key={project.project_name} className={`project-chip ${scheduleSelectedProjects.has(project.project_name) ? 'selected' : ''}`}>
+                              <input
+                                type="checkbox"
+                                checked={scheduleSelectedProjects.has(project.project_name)}
+                                onChange={() => toggleScheduleProject(project.project_name)}
+                              />
+                              <span className="chip-label">{project.project_name}</span>
+                            </label>
+                          ))}
+                          {scheduleProjects.length === 0 && <span className="text-muted empty-state-text">{t.noScheduleData}</span>}
                         </div>
                       </div>
-                      <div className="project-checkboxes">
-                        {scheduleProjects.map(project => (
-                          <label key={project.project_name} className={`project-chip ${scheduleSelectedProjects.has(project.project_name) ? 'selected' : ''}`}>
-                            <input
-                              type="checkbox"
-                              checked={scheduleSelectedProjects.has(project.project_name)}
-                              onChange={() => toggleScheduleProject(project.project_name)}
-                            />
-                            <span className="chip-label">{project.project_name}</span>
-                          </label>
-                        ))}
-                        {scheduleProjects.length === 0 && <span className="text-muted empty-state-text">{t.noScheduleData}</span>}
-                      </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                </div>
+                {/* 第二行：图表模式切换 */}
+                <div className="schedule-mode-toggle">
+                  <button
+                    type="button"
+                    className={scheduleChartMode === 'monthly' ? 'active' : ''}
+                    onClick={() => setScheduleChartMode('monthly')}
+                  >
+                    {t.chartModeMonthly}
+                  </button>
+                  <button
+                    type="button"
+                    className={scheduleChartMode === 'milestone' ? 'active' : ''}
+                    onClick={() => setScheduleChartMode('milestone')}
+                  >
+                    {t.chartModeMilestone}
+                  </button>
                 </div>
               </div>
             ) : (
@@ -1726,8 +1887,14 @@ const App = () => {
                       </div>
 
                       <ReactECharts
-                        option={scheduleChartOptions.get(project.project_name)}
-                        style={{ height: '360px' }}
+                        option={scheduleChartMode === 'monthly'
+                          ? scheduleChartOptions.get(project.project_name)
+                          : milestoneChartOptions.get(project.project_name)}
+                        style={{
+                          height: scheduleChartMode === 'milestone'
+                            ? `${Math.max(320, (project.milestones || []).length * 52 + 80)}px`
+                            : '360px'
+                        }}
                         notMerge={true}
                       />
                     </article>
