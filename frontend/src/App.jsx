@@ -1746,7 +1746,7 @@ const App = () => {
             )}
           </div>
 
-          {activeTab !== 'custom_data' && activeTab !== 'project_analysis' && (
+          {activeTab !== 'custom_data' && activeTab !== 'project_analysis' && activeTab !== 'overview' && (
             <div className="page-hero-panel">
               <div className="hero-panel-header">
                 <span>{uiText.currentView}</span>
@@ -1762,27 +1762,27 @@ const App = () => {
               </div>
             </div>
           )}
-        </header>
 
-        {activeTab === 'overview' && (
-          <section className="stats-grid hero-stats-grid">
-            <div className="card stat-card stat-card-primary">
-              <h3>{t.totalHours}</h3>
-              <p className="stat-value primary">{totalHoursValue.toFixed(1)} h</p>
-              <span className="stat-footnote">{uiText.periodRange}: {overviewTimeframeLabel}</span>
+          {activeTab === 'overview' && (
+            <div className="stats-grid hero-stats-grid">
+              <div className="card stat-card stat-card-primary">
+                <h3>{t.totalHours}</h3>
+                <p className="stat-value primary">{totalHoursValue.toFixed(1)} h</p>
+                <span className="stat-footnote">{uiText.periodRange}: {overviewTimeframeLabel}</span>
+              </div>
+              <div className="card stat-card stat-card-accent">
+                <h3>{t.avgProject}</h3>
+                <p className="stat-value accent">{avgProjectHoursValue.toFixed(1)} h</p>
+                <span className="stat-footnote">{uiText.visibleProjects}: {dashAvailableProjects.length}</span>
+              </div>
+              <div className="card stat-card stat-card-soft">
+                <h3>{t.dataPoints}</h3>
+                <p className="stat-value success">{dataPointsValue}</p>
+                <span className="stat-footnote">{uiText.visibleDepts}: {dashAvailableDepts.length}</span>
+              </div>
             </div>
-            <div className="card stat-card stat-card-accent">
-              <h3>{t.avgProject}</h3>
-              <p className="stat-value accent">{avgProjectHoursValue.toFixed(1)} h</p>
-              <span className="stat-footnote">{uiText.visibleProjects}: {dashAvailableProjects.length}</span>
-            </div>
-            <div className="card stat-card stat-card-soft">
-              <h3>{t.dataPoints}</h3>
-              <p className="stat-value success">{dataPointsValue}</p>
-              <span className="stat-footnote">{uiText.visibleDepts}: {dashAvailableDepts.length}</span>
-            </div>
-          </section>
-        )}
+          )}
+        </header>
 
         {activeTab === 'overview' && (
           <div className="reporting-tab section-shell">

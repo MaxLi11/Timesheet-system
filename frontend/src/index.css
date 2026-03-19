@@ -383,6 +383,14 @@ p {
   align-items: stretch;
 }
 
+.page-hero.page-hero-overview {
+  grid-template-columns: minmax(320px, 1.2fr) minmax(0, 3fr);
+}
+
+.hero-stats-grid {
+  height: 100%;
+}
+
 .page-intro-copy,
 .page-hero-panel,
 .card {
@@ -1361,7 +1369,8 @@ input[type='checkbox']:checked::after {
 }
 
 @media (max-width: 1240px) {
-  .page-hero {
+  .page-hero,
+  .page-hero.page-hero-overview {
     grid-template-columns: 1fr;
   }
 
