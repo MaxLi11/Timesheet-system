@@ -19,3 +19,21 @@ frontend/dist/
 temp_*
 .worktrees/
 .npm-cache/
+
+# Database
+timesheet.db
+
+# Skills (local agent tools, not part of the project)
+.agents/
+
+# Editor
+.vscode/
+
+# Local Excel files and temp folders
+*.xlsx
+*.xls
+定制表格/
+
+# Unnecessary docs
+docs/logo-redesign-notes.md
+docs/superpowers-workflow.md

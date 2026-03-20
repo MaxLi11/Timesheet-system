@@ -6,29 +6,16 @@ from . import database
 
 def save_time_entries(db: Session, entries: list):
     """
-    Saves a list of time entry dictionaries to the database using upsert logic.
-    For each entry, delete the matching record by (employee_id, project_name, category,
-    start_date, end_date) before inserting, so that:
-    - Re-uploading the same file updates existing records
-    - Uploading a different file for the same period does NOT delete unrelated records
+    Replaces all existing time entries with the new upload.
+    Each upload completely refreshes the timesheet data.
     """
     if not entries:
         return 0
 
-    for e in entries:
-        q = db.query(database.TimeEntry).filter(
-            database.TimeEntry.start_date == e['start_date'],
-            database.TimeEntry.end_date == e['end_date'],
-            database.TimeEntry.project_name == e['project_name'],
-            database.TimeEntry.category == e['category'],
-        )
-        eid = (e.get('employee_id') or '').strip()
-        if eid:
-            q = q.filter(database.TimeEntry.employee_id == eid)
-        else:
-            q = q.filter(database.TimeEntry.employee_name == e['employee_name'])
-        q.delete(synchronize_session=False)
+    # 1. Clear all existing time entries
+    db.query(database.TimeEntry).delete(synchronize_session=False)
 
+    # 2. Bulk insert all new entries in chunks
     CHUNK_SIZE = 5000
     for i in range(0, len(entries), CHUNK_SIZE):
         chunk = entries[i : i + CHUNK_SIZE]
