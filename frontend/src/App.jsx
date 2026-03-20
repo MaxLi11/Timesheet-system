@@ -1082,13 +1082,12 @@ const App = () => {
     }
 
     setScheduleSelectedProjects(prev => {
+      const allProjectNames = scheduleProjects.map(project => project.project_name);
       if (prev.size === 0) {
-        return new Set([scheduleProjects[0].project_name]);
+        return new Set(allProjectNames);
       }
-      const validSelections = scheduleProjects
-        .map(project => project.project_name)
-        .filter(projectName => prev.has(projectName));
-      return validSelections.length > 0 ? new Set(validSelections) : new Set([scheduleProjects[0].project_name]);
+      const validSelections = allProjectNames.filter(projectName => prev.has(projectName));
+      return validSelections.length > 0 ? new Set(validSelections) : new Set(allProjectNames);
     });
   }, [projectScheduleData]);
 
@@ -1598,24 +1597,36 @@ const App = () => {
           <div className="brand-lockup">
             <div className="logo">
               <div className="logo-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <defs>
-                    <linearGradient id="logo-cyan" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#05D5FF" />
-                      <stop offset="100%" stopColor="#5585FF" />
+                    <linearGradient id="anx-gradient-1" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#0066FF" />
+                      <stop offset="100%" stopColor="#00D4FF" />
                     </linearGradient>
-                    <linearGradient id="logo-purple" x1="0%" y1="100%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#FF2E93" />
-                      <stop offset="100%" stopColor="#FF8000" />
+                    <linearGradient id="anx-gradient-2" x1="100%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#4D72FF" />
+                      <stop offset="100%" stopColor="#7AA6FF" />
                     </linearGradient>
+                    <filter id="glow">
+                      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+                      <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                      </feMerge>
+                    </filter>
                   </defs>
-                  <path d="M5 3H19C19 3 18 10 12 12C6 10 5 3 5 3Z" fill="url(#logo-cyan)" fillOpacity="0.8" stroke="url(#logo-cyan)" strokeWidth="1.5" strokeLinejoin="round"/>
-                  <path d="M5 21H19C19 21 18 14 12 12C6 14 5 21 5 21Z" fill="url(#logo-purple)" fillOpacity="0.8" stroke="url(#logo-purple)" strokeWidth="1.5" strokeLinejoin="round"/>
-                  <circle cx="12" cy="12" r="2.5" fill="#FFFFFF" />
+                  {/* 外圈 - 代表连接和显示技术 */}
+                  <circle cx="16" cy="16" r="13" stroke="url(#anx-gradient-1)" strokeWidth="1.5" fill="none" opacity="0.3"/>
+                  {/* A 字母抽象化 - 三角形结构 */}
+                  <path d="M16 6 L24 20 L20 20 L16 12 L12 20 L8 20 Z" fill="url(#anx-gradient-1)" filter="url(#glow)"/>
+                  {/* 中心点 - 代表核心技术 */}
+                  <circle cx="16" cy="16" r="2" fill="#FFFFFF" opacity="0.95"/>
+                  {/* 信号波纹效果 */}
+                  <circle cx="16" cy="16" r="8" stroke="url(#anx-gradient-2)" strokeWidth="1.2" fill="none" opacity="0.4" strokeDasharray="2 3"/>
                 </svg>
               </div>
               <div className="logo-copy">
-                <span className="logo-title">AnxShowtime</span>
+                <span className="logo-title">Anx Showtime</span>
                 <div className="logo-badge">
                   <span className="logo-badge-dot"></span>
                   {uiText.workspace}
