@@ -25,9 +25,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends nginx \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code, DB and frontend build
+# Copy backend code and frontend build
+# Note: timesheet.db is NOT copied here intentionally.
+# The app creates an empty DB on first startup via init_db().
+# For data persistence across container restarts, enable Persistent Storage
+# in Hugging Face Space settings (mount path: /app) or set DATABASE_URL
+# to an external PostgreSQL instance.
 COPY backend ./backend
-COPY timesheet.db .
 COPY --from=frontend-build /frontend/dist /usr/share/nginx/html
 
 # Nginx config
