@@ -1,0 +1,73 @@
+# Feishu Timesheet Sync Service Configuration Example
+# 飞书工时管理自动化系统配置示例
+
+# Application Settings
+app:
+  name: "Feishu Timesheet Sync Service"
+  version: "0.1.0"
+  debug: true
+  host: "0.0.0.0"
+  port: 8001
+
+# Database Configuration
+database:
+  # SQLite for development
+  url: "sqlite:///./feishu_timesheet.db"
+  # PostgreSQL for production (uncomment to use)
+  # url: "postgresql://user:password@localhost:5432/feishu_timesheet"
+  echo: false
+  pool_size: 5
+  max_overflow: 10
+
+# Feishu API Configuration
+feishu:
+  app_id: "your_app_id_here"
+  app_secret: "your_app_secret_here"
+  # Multi-dimensional table configuration
+  timesheet_app_token: "your_timesheet_app_token"
+  timesheet_table_id: "your_timesheet_table_id"
+  project_config_app_token: "your_project_config_app_token"
+  project_config_table_id: "your_project_config_table_id"
+  # API settings
+  api_base_url: "https://open.feishu.cn/open-apis"
+  timeout: 30
+  max_retries: 3
+  retry_delay: 1
+
+# Website Backend API Configuration
+website:
+  api_base_url: "http://localhost:8000/api"
+  api_key: "your_website_api_key"
+  timeout: 30
+  max_retries: 3
+
+# Sync Schedule Configuration
+sync:
+  # Cron expression: every Monday at 2:00 AM
+  cron_expression: "0 2 * * 1"
+  # Timezone
+  timezone: "Asia/Shanghai"
+  # Batch size for syncing
+  batch_size: 100
+  # Enable auto sync
+  enabled: true
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "json"
+  file: "logs/feishu_service.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
+  console: true
+
+# Standard Hours Configuration
+standard_hours:
+  weekly: 40
+  monthly: 160
+
+# Notification Configuration
+notification:
+  enabled: true
+  approval_timeout_hours: 48
+  reminder_enabled: true
