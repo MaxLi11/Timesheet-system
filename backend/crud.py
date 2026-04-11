@@ -1,8 +1,18 @@
-from datetime import date
+import json
+from datetime import date, datetime
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from . import database
+
+UPLOAD_VANISHED_KEY = "vanished_after_upload"
+
+
+def _active_entry_filter():
+    status = func.lower(func.coalesce(database.TimeEntry.employee_status, ""))
+    return (~status.contains("离职")) & (~status.contains("terminated"))
+
 
 def save_time_entries(db: Session, entries: list):
     """
@@ -28,7 +38,7 @@ def get_stats(db: Session, start_date: date = None, end_date: date = None):
     """
     Retrieves time entries where current_node = 'Close' (case-insensitive).
     This ensures only fully-approved entries are counted in the main statistics.
-    The approval and reporting-rate features use their own separate queries.
+    Includes all employees (active and terminated) — no employee status filter.
     """
     from sqlalchemy import func
     query = db.query(database.TimeEntry).filter(
@@ -48,7 +58,125 @@ def clear_all_data(db: Session):
     db.query(database.ProjectScheduleMilestone).delete()
     db.query(database.ProjectSchedule).delete()
     db.query(database.TimeEntry).delete()
+    db.query(database.Employee).delete()
+    db.query(database.AppState).delete()
     db.commit()
+
+
+def get_distinct_employee_names_in_time_entries(db: Session):
+    """All distinct 员工姓名 in current snapshot (before replace)."""
+    rows = db.query(database.TimeEntry.employee_name).distinct().all()
+    out = set()
+    for (name,) in rows:
+        if name is None:
+            continue
+        text = str(name).strip()
+        if text:
+            out.add(text)
+    return out
+
+
+def get_active_employee_name_set(db: Session):
+    """在职员工姓名（与主统计一致，排除离职/terminated）。"""
+    rows = (
+        db.query(database.Employee.name)
+        .filter(~func.lower(func.coalesce(database.Employee.status, "")).contains("离职"))
+        .filter(~func.lower(func.coalesce(database.Employee.status, "")).contains("terminated"))
+        .all()
+    )
+    return {str(r[0]).strip() for r in rows if r[0] and str(r[0]).strip()}
+
+
+def compute_vanished_after_upload(previous_names: set, new_entries: list, active_name_set: set):
+    """
+    上一版有工时行、本版 Excel 中完全没有出现的人员（按姓名）。
+    若 active_name_set 非空，则只保留仍在职的人员。
+    """
+    new_names = set()
+    for entry in new_entries:
+        name = (entry.get("employee_name") or "").strip()
+        if name:
+            new_names.add(name)
+    raw = previous_names - new_names
+    if active_name_set:
+        raw = raw & active_name_set
+    return sorted(raw)
+
+
+def save_vanished_after_upload(db: Session, names: list):
+    payload = json.dumps({"names": names}, ensure_ascii=False)
+    row = db.query(database.AppState).filter(database.AppState.key == UPLOAD_VANISHED_KEY).first()
+    now = datetime.utcnow()
+    if row:
+        row.value_json = payload
+        row.updated_at = now
+    else:
+        db.add(
+            database.AppState(
+                key=UPLOAD_VANISHED_KEY,
+                value_json=payload,
+                updated_at=now,
+            )
+        )
+    db.commit()
+
+
+def get_vanished_after_upload(db: Session):
+    row = db.query(database.AppState).filter(database.AppState.key == UPLOAD_VANISHED_KEY).first()
+    if not row or not row.value_json:
+        return {"names": [], "updated_at": None}
+    try:
+        data = json.loads(row.value_json)
+    except json.JSONDecodeError:
+        return {"names": [], "updated_at": None}
+    names = data.get("names") or []
+    updated = row.updated_at.isoformat() + "Z" if row.updated_at else None
+    return {"names": names, "updated_at": updated}
+
+
+def save_employee_profiles(db: Session, profiles: list):
+    db.query(database.Employee).delete(synchronize_session=False)
+    if not profiles:
+        db.commit()
+        return 0
+
+    dedup = {}
+    for profile in profiles:
+        employee_name = (profile.get("employee_name") or "").strip()
+        if not employee_name:
+            continue
+        dedup[employee_name] = {
+            "name": employee_name,
+            "employee_id": (profile.get("employee_id") or "").strip() or None,
+            "department": (profile.get("department_full") or "").strip(),
+            "position": (profile.get("position") or "").strip(),
+            "status": (profile.get("employee_status") or "").strip(),
+        }
+
+    if dedup:
+        db.bulk_insert_mappings(database.Employee, list(dedup.values()))
+    db.commit()
+    return len(dedup)
+
+
+def get_active_employees(db: Session):
+    rows = (
+        db.query(database.Employee)
+        .filter(~func.lower(func.coalesce(database.Employee.status, "")).contains("离职"))
+        .filter(~func.lower(func.coalesce(database.Employee.status, "")).contains("terminated"))
+        .order_by(database.Employee.name.asc())
+        .all()
+    )
+    return [
+        {
+            "employee_name": row.name or "",
+            "employee_id": row.employee_id or "",
+            "department_full": row.department or "",
+            "position": row.position or "",
+            "status": row.status or "",
+        }
+        for row in rows
+    ]
 
 
 def save_project_schedules(db: Session, projects: list):
@@ -164,6 +292,7 @@ def _build_project_intervals(db: Session, mapped_projects: list, milestones: lis
                 func.sum(database.TimeEntry.hours).label("total_hours"),
             )
             .filter(func.lower(database.TimeEntry.current_node) == "close")
+            .filter(_active_entry_filter())
             .filter(database.TimeEntry.project_name.in_(mapped_projects))
             .filter(database.TimeEntry.start_date >= current_milestone.actual_date)
             .filter(database.TimeEntry.start_date < next_milestone.actual_date)
@@ -206,9 +335,8 @@ def _coerce_number(value):
 
 def get_reporting_rate(db: Session):
     """
-    Returns time entries for the Reporting Rate feature.
-    Excludes rows where approval_status starts with '未提交' (i.e. 'Not Submitted').
-    This ensures only entries that have been at least submitted are counted.
+    Returns time entries for the Reporting Rate feature (完整填报率 · 工时差异).
+    Original rule: exclude rows where 核准状态 is exactly '未提交 Not Submitted' (after strip).
     """
     entries = db.query(
         database.TimeEntry.start_date,
@@ -218,7 +346,7 @@ def get_reporting_rate(db: Session):
         database.TimeEntry.department,
         database.TimeEntry.hours,
         database.TimeEntry.approval_status
-    ).all()
+    ).filter(_active_entry_filter()).all()
 
     return [
         {
@@ -230,8 +358,7 @@ def get_reporting_rate(db: Session):
             "hours": e.hours
         }
         for e in entries
-        # Exclude '未提交 Not Submitted' entries (exact match)
-        if (e.approval_status or '').strip() != '未提交 Not Submitted'
+        if (e.approval_status or "").strip() != "未提交 Not Submitted"
     ]
 
 def get_approval_rate(db: Session):
@@ -249,7 +376,7 @@ def get_approval_rate(db: Session):
         database.TimeEntry.current_node,
         database.TimeEntry.pending_approver,
         database.TimeEntry.project_name
-    ).all()
+    ).filter(_active_entry_filter()).all()
 
     result = []
     for e in entries:
@@ -306,7 +433,7 @@ def get_person_month_ratio(db: Session):
 
     entries = db.query(database.TimeEntry).filter(
         func.lower(database.TimeEntry.current_node) == "close"
-    ).all()
+    ).filter(_active_entry_filter()).all()
 
     def resolve_month(start_date) -> str:
         if start_date and start_date in week_map:

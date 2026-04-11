@@ -670,6 +670,8 @@ const App = () => {
   const [lang, setLang] = useState('zh'); // 'zh' or 'en'
   // Reporting Rate state
   const [reportingData, setReportingData] = useState([]);
+  const [activeEmployees, setActiveEmployees] = useState([]);
+  const [vanishedAfterUpload, setVanishedAfterUpload] = useState({ names: [], updated_at: null });
   const [targetHours, setTargetHours] = useState(40);
   const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
@@ -830,6 +832,27 @@ const App = () => {
   t.personMonthRatioSubtitle = lang === 'zh'
     ? '按项目 + Close 口径，计算每位员工每月工时占比（需先上传工作周划分文件）。'
     : 'Per-project Close-scoped monthly ratio per employee. Requires work week file upload.';
+  t.completenessTitle = lang === 'zh' ? '填报完整性检查' : 'Reporting Completeness';
+  t.completenessBaseline = lang === 'zh' ? '基数人数' : 'Baseline Employees';
+  t.completenessSubmitted = lang === 'zh' ? '本期已填报' : 'Submitted This Period';
+  t.completenessMissing = lang === 'zh' ? '需补填人数' : 'Missing Employees';
+  t.completenessRate = lang === 'zh' ? '完整性' : 'Completeness';
+  t.completenessMissingList = lang === 'zh' ? '需补填员工（前20）' : 'Missing Employees (Top 20)';
+  t.completenessNoMissing = lang === 'zh' ? '本期无补填对象。' : 'No missing employees in current period.';
+  t.completenessMethodA = lang === 'zh' ? '方式A：员工基础信息在职人员' : 'Method A: Active Employees from HR Roster';
+  t.completenessMethodADesc = lang === 'zh' ? '以员工基础信息表中所有在职人员为基数，检查本期是否填报工时。' : 'Checks whether all active employees in the HR roster have submitted hours this period.';
+  t.completenessMethodB = lang === 'zh' ? '方式B：历史填报在职人员' : 'Method B: Historical Reporters Still Active';
+  t.completenessMethodBDesc = lang === 'zh' ? '基于最新上传：历史填报基数中，本次上传文件未出现的漏填人员名单。' : 'Based on latest upload: missing employees from historical filing baseline who did not appear in the newly uploaded file.';
+  t.reportingGapCaption = lang === 'zh'
+    ? '以下按「应填工时 vs 实际工时」汇总，仅按姓名；不含核准状态为「未提交 Not Submitted」的整行（与原先逻辑一致）。'
+    : 'Target vs actual hours by employee name; excludes rows whose status is exactly “未提交 Not Submitted” (original rule).';
+  t.vanishedUploadTitle = lang === 'zh' ? '本次上传表中未出现的人员' : 'Missing from latest upload file';
+  t.vanishedUploadSubtitle = lang === 'zh'
+    ? '相对上一份上传：曾有工时记录，但本文件里完全没有该人员任何一行（按姓名；限在职）。与上方「应填对比」不是同一规则。'
+    : 'Had rows before the last replace, but absent from the new file (by name; active employees only). Different from the hour-gap section above.';
+  t.vanishedUploadEmpty = lang === 'zh' ? '无此类人员。' : 'None.';
+  t.vanishedUploadList = lang === 'zh' ? '名单（前40）' : 'Names (first 40)';
+  t.vanishedUploadCount = lang === 'zh' ? '人数' : 'Count';
 
   const uiText = {
     zh: {
@@ -940,6 +963,31 @@ const App = () => {
     }
   }, []);
 
+  const fetchActiveEmployees = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/active-employees`);
+      if (!res.ok) return;
+      const json = await res.json();
+      setActiveEmployees(Array.isArray(json) ? json : []);
+    } catch (err) {
+      console.error('Failed to fetch active employees:', err);
+    }
+  }, []);
+
+  const fetchVanishedAfterUpload = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vanished-after-upload`);
+      if (!res.ok) return;
+      const json = await res.json();
+      setVanishedAfterUpload({
+        names: Array.isArray(json.names) ? json.names : [],
+        updated_at: json.updated_at || null
+      });
+    } catch (err) {
+      console.error('Failed to fetch vanished-after-upload:', err);
+    }
+  }, []);
+
   const fetchApprovalData = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/approval-rate`);
@@ -979,6 +1027,8 @@ const App = () => {
     checkConnection();
     fetchData();
     fetchReportingData();
+    fetchActiveEmployees();
+    fetchVanishedAfterUpload();
     fetchApprovalData();
     fetchProjectScheduleData();
     const interval = setInterval(() => {
@@ -986,7 +1036,7 @@ const App = () => {
         // optionally refresh data periodically, but checking connection is enough
     }, 5000);
     return () => clearInterval(interval);
-  }, [fetchData, fetchReportingData, fetchApprovalData, fetchProjectScheduleData]);
+  }, [fetchData, fetchReportingData, fetchActiveEmployees, fetchVanishedAfterUpload, fetchApprovalData, fetchProjectScheduleData]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -997,9 +1047,12 @@ const App = () => {
       const res = await fetch(`${API_BASE_URL}/upload`, { method: 'POST', body: formData });
       const result = await res.json();
       if (!res.ok) throw new Error(result.detail || result.message || 'Upload failed');
-      alert(`${t.success} ${result.rows_processed} rows.`);
+      const vc = result.vanished_count ?? 0;
+      alert(`${t.success} ${result.rows_processed} rows, employees ${result.employees_processed ?? 0}. ${t.vanishedUploadCount}: ${vc}.`);
       fetchData();
       fetchReportingData();
+      fetchActiveEmployees();
+      fetchVanishedAfterUpload();
       fetchApprovalData();
       fetchProjectScheduleData();
     } catch (err) {
@@ -1129,6 +1182,14 @@ const App = () => {
   const reportingByDept = useMemo(() =>
     dataHelper.groupReportingByDept(reportingRecords),
     [reportingRecords]
+  );
+
+  const reportingCompleteness = useMemo(
+    () => ({
+      missing_employees: vanishedAfterUpload.names || [],
+      missing_count: (vanishedAfterUpload.names || []).length
+    }),
+    [vanishedAfterUpload]
   );
 
   // Approval Rate computed
@@ -2112,6 +2173,8 @@ const App = () => {
               </div>
             </div>
 
+            <p className="module-caption" style={{ marginBottom: '0.75rem' }}>{t.reportingGapCaption}</p>
+
             {Object.keys(reportingByDept).length === 0 ? (
               <div className="card no-issues table-card">{t.noIssues}</div>
             ) : (
@@ -2159,6 +2222,42 @@ const App = () => {
                 </div>
               ))
             )}
+
+            <div className="card table-card" style={{ marginTop: '0.9rem', marginBottom: '0.9rem' }}>
+              <div className="card-heading-row">
+                <div>
+                  <h3 style={{ margin: 0 }}>{t.vanishedUploadTitle}</h3>
+                  <p className="module-caption" style={{ marginTop: '6px' }}>{t.vanishedUploadSubtitle}</p>
+                </div>
+                <div className="inline-summary-stats">
+                  <span className="stat-item danger">{t.vanishedUploadCount} <strong>{vanishedAfterUpload.names.length}</strong></span>
+                </div>
+              </div>
+              {vanishedAfterUpload.names.length > 0 ? (
+                <div className="module-caption" style={{ marginTop: '0.5rem' }}>
+                  {t.vanishedUploadList}: {vanishedAfterUpload.names.slice(0, 40).join(', ')}
+                  {vanishedAfterUpload.names.length > 40 ? '…' : ''}
+                </div>
+              ) : (
+                <div className="module-caption" style={{ marginTop: '0.5rem' }}>{t.vanishedUploadEmpty}</div>
+              )}
+            </div>
+
+            <div className="card table-card" style={{ marginBottom: '0.9rem' }}>
+              <div className="card-heading-row">
+                <div>
+                  <h3 style={{ margin: 0 }}>{t.completenessTitle}</h3>
+                  <p className="module-caption" style={{ marginTop: '6px' }}>{t.completenessMethodBDesc}</p>
+                </div>
+              </div>
+              {(reportingCompleteness.missing_count ?? 0) > 0 ? (
+                <div className="module-caption" style={{ marginTop: '0.5rem' }}>
+                  {t.completenessMissingList}: {(reportingCompleteness.missing_employees ?? []).slice(0, 50).join(', ')}
+                </div>
+              ) : (
+                <div className="module-caption" style={{ marginTop: '0.5rem' }}>{t.completenessNoMissing}</div>
+              )}
+            </div>
           </div>
         )}
 

@@ -162,6 +162,9 @@ export const getReportingPeriodOptions = (entries) => {
  * @param {string} filterWeek  - Optional: '2026-W10' (for weekly view within month)
  * @param {number} targetHours - User-provided target
  */
+/** 完整填报率汇总只按人员姓名，不使用工号 */
+const reportingEmployeeGroupKey = (entry) => (entry.employee_name || '').trim() || 'unknown';
+
 export const computeReportingRate = (entries, filterYear, filterMonth, filterWeek, targetHours) => {
     if (!filterYear) return [];
 
@@ -190,14 +193,14 @@ export const computeReportingRate = (entries, filterYear, filterMonth, filterWee
         passesFilter = (d) => String(d.year()) === filterYear;
     }
 
-    // Group by (period_key, employee_id)
+    // Group by (period_key, employee_name only)
     const map = {};
     entries.forEach(entry => {
         const d = dayjs(entry.start_date);
         if (!passesFilter(d)) return;
 
         const periodKey = getPeriodKey(d);
-        const key = `${periodKey}___${entry.employee_id}`;
+        const key = `${periodKey}___${reportingEmployeeGroupKey(entry)}`;
         if (!map[key]) {
             map[key] = {
                 period_key: periodKey,
@@ -218,6 +221,59 @@ export const computeReportingRate = (entries, filterYear, filterMonth, filterWee
         }))
         .filter(r => r.gap !== 0)
         .sort((a, b) => a.period_key.localeCompare(b.period_key) || a.department.localeCompare(b.department));
+};
+
+export const computeReportingCompleteness = (
+    entries,
+    activeEmployees,
+    filterYear,
+    filterMonth,
+    filterWeek
+) => {
+    if (!filterYear) {
+        return {
+            missing_employees: [],
+            missing_count: 0
+        };
+    }
+
+    const getMonthNum = (d) => String(d.month() + 1).padStart(2, '0');
+    const getWeekNum = (d) => String(d.isoWeek()).padStart(2, '0');
+
+    // 在职员工集合（来自员工基础信息表）
+    const activeSet = new Set((activeEmployees || []).map(item => (item.employee_name || '').trim()).filter(Boolean));
+
+    // 方式B：历史填报在职人员名单
+    // 基数 = 历史上填过工时且当前仍在职的人
+    const historicalFilers = new Set();
+    entries.forEach(entry => {
+        const employeeName = (entry.employee_name || '').trim();
+        if (employeeName) historicalFilers.add(employeeName);
+    });
+
+    // 如果有在职员工表，则只保留其中仍在职的人（排除已离职）
+    const baselineSetB = activeSet.size > 0
+        ? new Set([...historicalFilers].filter(name => activeSet.has(name)))
+        : historicalFilers;
+
+    // 检查这些人在选定时间段内是否填了工时
+    const submittedSetB = new Set();
+    entries.forEach(entry => {
+        const employeeName = (entry.employee_name || '').trim();
+        if (!employeeName || !baselineSetB.has(employeeName)) return;
+        const d = dayjs(entry.start_date);
+        if (String(d.year()) !== filterYear) return;
+        if (filterMonth && getMonthNum(d) !== filterMonth) return;
+        if (filterWeek && getWeekNum(d) !== filterWeek) return;
+        submittedSetB.add(employeeName);
+    });
+
+    const missingEmployees = [...baselineSetB].filter(name => !submittedSetB.has(name)).sort();
+
+    return {
+        missing_employees: missingEmployees,
+        missing_count: missingEmployees.length
+    };
 };
 
 /**

@@ -95,53 +95,123 @@ def load_dept_mapping():
     return _DEPT_MAPPING_CACHE
 
 
-def parse_timesheet(file_path: str):
-    dept_mapping = load_dept_mapping()
+def parse_timesheet(file_path: str, include_metadata: bool = False):
     try:
-        df = pd.read_excel(file_path, sheet_name=0)
-        df.columns = _normalize_timesheet_columns(df.columns)
+        workbook = pd.read_excel(file_path, sheet_name=None)
+        if not isinstance(workbook, dict):
+            workbook = {"Sheet0": workbook}
 
+        # 步骤1：读取项目别名映射（表3）
+        project_alias_mapping = _extract_project_alias_mapping(workbook)
+
+        # 步骤2：读取员工信息（表4）和部门映射（表5）
+        employee_profiles = _extract_employee_profiles(workbook)
+        employee_lookup = {
+            _clean_text(profile.get("employee_name")): profile
+            for profile in employee_profiles
+            if _clean_text(profile.get("employee_name"))
+        }
+        dept_mapping = _extract_department_mapping(workbook) or load_dept_mapping()
+
+        # 步骤3：识别所有工时表（表1主工时 + 表2原OA补录）
+        timesheet_frames = _extract_timesheet_frames(workbook)
+        if not timesheet_frames:
+            raise ValueError("未找到可解析的工时数据sheet。")
+
+        # 步骤4：从第一个工时表（表1主工时）解析基础工时
+        #         然后把其余工时表（表2原OA）的工时按员工+项目+月份累加进来
         required_columns = ["员工", "所属部门", "工号", "开始日期", "结束日期"]
-        missing_columns = [column for column in required_columns if column not in df.columns]
-        if missing_columns:
-            raise ValueError(f"Excel文件中缺少以下必填列: {', '.join(missing_columns)}。")
 
-        entries = []
-        for index, row in df.iterrows():
-            category, project_name, hours_value = _resolve_timesheet_identity(row)
-            if not project_name:
-                continue
+        # 用字典做去重+累加：key=(employee_name, project_name, category, start_date, end_date)
+        # 注意：原OA补录按月对应，相同员工+项目+月的工时累加
+        entries_map = {}
 
-            employee_name = _clean_text(row.get("员工"))
-            numeric_hours = pd.to_numeric(hours_value, errors="coerce")
-            if not employee_name or pd.isna(numeric_hours) or float(numeric_hours) == 0:
-                continue
+        def _parse_frame_rows(df, is_supplemental=False):
+            missing_columns = [c for c in required_columns if c not in df.columns]
+            if missing_columns:
+                if is_supplemental:
+                    return  # 补录表允许跳过，不报错
+                raise ValueError(f"Excel文件中缺少以下必填列: {', '.join(missing_columns)}。")
 
-            start_date = _normalize_excel_date(row.get("开始日期"))
-            end_date = _normalize_excel_date(row.get("结束日期"))
-            if not start_date or not end_date:
-                continue
+            for _, row in df.iterrows():
+                category, project_name, hours_value = _resolve_timesheet_identity(
+                    row, project_alias_mapping
+                )
+                if not project_name:
+                    continue
 
-            raw_department = _clean_text(row.get("所属部门"))
-            entries.append(
-                {
+                employee_name = _clean_text(row.get("员工"))
+                numeric_hours = pd.to_numeric(hours_value, errors="coerce")
+                if not employee_name or pd.isna(numeric_hours) or float(numeric_hours) == 0:
+                    continue
+
+                start_date = _normalize_excel_date(row.get("开始日期"))
+                end_date = _normalize_excel_date(row.get("结束日期"))
+                if not start_date or not end_date:
+                    continue
+
+                profile = employee_lookup.get(employee_name, {})
+                profile_department = _clean_text(profile.get("department_full"))
+                profile_position = _clean_text(profile.get("position"))
+                profile_status = _clean_text(profile.get("employee_status"))
+
+                raw_department = _clean_text(row.get("所属部门")) or profile_department
+
+                # 原OA补录按月累加：key用(员工, 项目, category, 年月)
+                # 主表（表1）用精确日期作为key，保留每一条独立记录
+                if is_supplemental:
+                    month_key = start_date.strftime("%Y-%m")
+                    merge_key = (employee_name, project_name, category, month_key)
+                    if merge_key in entries_map:
+                        entries_map[merge_key]["hours"] += float(numeric_hours)
+                        continue
+                    # 原OA新增条目，用当月第一天作为start_date
+                    import calendar
+                    last_day = calendar.monthrange(start_date.year, start_date.month)[1]
+                    from datetime import date as date_type
+                    supplemental_start = date_type(start_date.year, start_date.month, 1)
+                    supplemental_end = date_type(start_date.year, start_date.month, last_day)
+                else:
+                    # 主表每条记录用唯一序号区分，完整保留所有条目
+                    merge_key = (employee_name, project_name, category, start_date, end_date, len(entries_map))
+                    supplemental_start = start_date
+                    supplemental_end = end_date
+
+                entry = {
                     "employee_name": employee_name,
-                    "employee_id": _clean_text(row.get("工号")),
+                    "employee_id": _clean_text(row.get("工号")) or _clean_text(profile.get("employee_id")),
+                    "employee_status": profile_status,
                     "department": _map_department_name(raw_department, dept_mapping),
-                    "department_full": raw_department,
-                    "position": _clean_text(row.get("职位")),
+                    "department_full": profile_department or raw_department,
+                    "position": profile_position or _clean_text(row.get("职位")),
                     "project_name": project_name,
                     "category": category,
-                    "start_date": start_date,
-                    "end_date": end_date,
+                    "start_date": supplemental_start if is_supplemental else start_date,
+                    "end_date": supplemental_end if is_supplemental else end_date,
                     "hours": float(numeric_hours),
                     "task_details": _clean_text(row.get("任务详情")),
                     "approval_status": _clean_text(row.get("核准状态")),
                     "current_node": _clean_text(row.get("当前节点")),
                     "pending_approver": _clean_text(row.get("未操作者")),
                 }
-            )
 
+                if merge_key not in entries_map:
+                    entries_map[merge_key] = entry
+                else:
+                    # 主表中同月同员工同项目的多条记录，工时累加
+                    entries_map[merge_key]["hours"] += float(numeric_hours)
+
+        # 先解析表1（主工时，第一个识别到的工时表）
+        _parse_frame_rows(timesheet_frames[0], is_supplemental=False)
+
+        # 再把其余工时表（原OA补录等）按月累加进来
+        for supplemental_df in timesheet_frames[1:]:
+            _parse_frame_rows(supplemental_df, is_supplemental=True)
+
+        entries = list(entries_map.values())
+
+        if include_metadata:
+            return {"entries": entries, "employee_profiles": employee_profiles}
         return entries
     except Exception as exc:
         raise Exception(f"解析Excel失败: {exc}") from exc
@@ -164,14 +234,25 @@ def _normalize_timesheet_columns(columns):
     return normalized_columns
 
 
-def _resolve_timesheet_identity(row):
+def _resolve_timesheet_identity(row, project_alias_mapping=None):
+    alias_mapping = project_alias_mapping or {}
+
+    def normalize_project_name(value):
+        text = _clean_text(value)
+        if not text:
+            return ""
+        # 项目别名替换：同时检查新旧两列中的项目名
+        return alias_mapping.get(text.lower(), text)
+
+    # 优先用"项目名称(新)"列，同时做别名替换
     project_new = _clean_text(row.get("项目名称(新)"))
     if project_new:
-        return "Project", project_new, row.get("合计_项目")
+        return "Project", normalize_project_name(project_new), row.get("合计_项目")
 
+    # 再看"项目名称(作废)"列，同样做别名替换
     project_legacy = _clean_text(row.get("项目名称(作废)"))
     if project_legacy:
-        return "Project", project_legacy, row.get("合计_项目")
+        return "Project", normalize_project_name(project_legacy), row.get("合计_项目")
 
     non_project_name = _clean_text(row.get("非项目名称"))
     if non_project_name:
@@ -201,6 +282,99 @@ def _map_department_name(raw_department, dept_mapping):
             return short_name
 
     return raw_department
+
+
+def _extract_timesheet_frames(workbook):
+    frames = []
+    for sheet_name, df in workbook.items():
+        if not isinstance(df, pd.DataFrame):
+            continue
+        normalized_df = df.copy()
+        normalized_df.columns = _normalize_timesheet_columns(normalized_df.columns)
+        if _is_timesheet_frame(normalized_df):
+            frames.append(normalized_df)
+    return frames
+
+
+def _is_timesheet_frame(df: pd.DataFrame):
+    required_columns = {"员工", "所属部门", "工号", "开始日期", "结束日期"}
+    if not required_columns.issubset(set(df.columns)):
+        return False
+    return any(
+        column in df.columns
+        for column in ("项目名称(新)", "项目名称(作废)", "非项目名称", "合计_项目", "合计_非项目")
+    )
+
+
+def _extract_project_alias_mapping(workbook):
+    alias_mapping = {}
+    for _, df in workbook.items():
+        if not isinstance(df, pd.DataFrame) or df.shape[1] < 2:
+            continue
+        if df.shape[1] > 3 or df.shape[0] > 200:
+            continue
+        two_col_df = df.iloc[:, :2].copy()
+        for _, row in two_col_df.iterrows():
+            source = _clean_text(row.iloc[0])
+            target = _clean_text(row.iloc[1])
+            if not source or not target or source == target:
+                continue
+            if source.lower() in {"原项目名", "原项目", "source", "old"}:
+                continue
+            alias_mapping[source.lower()] = target
+    return alias_mapping
+
+
+def _extract_employee_profiles(workbook):
+    candidate_sheets = []
+    for _, df in workbook.items():
+        if not isinstance(df, pd.DataFrame):
+            continue
+        if df.shape[0] < 50 or df.shape[1] < 7:
+            continue
+        if _is_timesheet_frame(df):
+            continue
+        candidate_sheets.append(df)
+
+    if not candidate_sheets:
+        return []
+
+    sheet = max(candidate_sheets, key=lambda frame: frame.shape[0])
+    profiles = []
+    for _, row in sheet.iterrows():
+        employee_name = _clean_text(row.iloc[2] if len(row) > 2 else "")
+        if not employee_name:
+            continue
+        profiles.append(
+            {
+                "employee_name": employee_name,
+                "department_full": _clean_text(row.iloc[3] if len(row) > 3 else ""),
+                "position": _clean_text(row.iloc[6] if len(row) > 6 else ""),
+                "employee_id": _clean_text(row.iloc[7] if len(row) > 7 else ""),
+                "employee_status": _clean_text(row.iloc[0] if len(row) > 0 else ""),
+            }
+        )
+    return profiles
+
+
+def _extract_department_mapping(workbook):
+    for _, df in workbook.items():
+        if not isinstance(df, pd.DataFrame):
+            continue
+        if df.shape[1] < 2 or df.shape[0] < 5:
+            continue
+        if _is_timesheet_frame(df):
+            continue
+        mapping = {}
+        for _, row in df.iloc[:, :2].iterrows():
+            full_name = _clean_text(row.iloc[0])
+            short_name = _clean_text(row.iloc[1])
+            if not full_name or not short_name:
+                continue
+            mapping[full_name] = short_name
+        if len(mapping) >= 20:
+            return mapping
+    return {}
 
 
 def _normalize_excel_date(value):
