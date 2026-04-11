@@ -837,12 +837,12 @@ const App = () => {
   t.completenessSubmitted = lang === 'zh' ? '本期已填报' : 'Submitted This Period';
   t.completenessMissing = lang === 'zh' ? '需补填人数' : 'Missing Employees';
   t.completenessRate = lang === 'zh' ? '完整性' : 'Completeness';
-  t.completenessMissingList = lang === 'zh' ? '需补填员工（前20）' : 'Missing Employees (Top 20)';
+  t.completenessMissingList = lang === 'zh' ? '需补填员工（前50）' : 'Missing Employees (Top 50)';
   t.completenessNoMissing = lang === 'zh' ? '本期无补填对象。' : 'No missing employees in current period.';
   t.completenessMethodA = lang === 'zh' ? '方式A：员工基础信息在职人员' : 'Method A: Active Employees from HR Roster';
   t.completenessMethodADesc = lang === 'zh' ? '以员工基础信息表中所有在职人员为基数，检查本期是否填报工时。' : 'Checks whether all active employees in the HR roster have submitted hours this period.';
   t.completenessMethodB = lang === 'zh' ? '方式B：历史填报在职人员' : 'Method B: Historical Reporters Still Active';
-  t.completenessMethodBDesc = lang === 'zh' ? '基于最新上传：历史填报基数中，本次上传文件未出现的漏填人员名单。' : 'Based on latest upload: missing employees from historical filing baseline who did not appear in the newly uploaded file.';
+  t.completenessMethodBDesc = lang === 'zh' ? '基于最新上传数据：对最近4周逐周检查，历史填报且在职人员中，任意一周未出现即判定为漏填。' : 'Based on latest upload data: check each of the latest 4 weeks, and mark an active historical filer as missing if absent in any week.';
   t.reportingGapCaption = lang === 'zh'
     ? '以下按「应填工时 vs 实际工时」汇总，仅按姓名；不含核准状态为「未提交 Not Submitted」的整行（与原先逻辑一致）。'
     : 'Target vs actual hours by employee name; excludes rows whose status is exactly “未提交 Not Submitted” (original rule).';
@@ -1185,11 +1185,8 @@ const App = () => {
   );
 
   const reportingCompleteness = useMemo(
-    () => ({
-      missing_employees: vanishedAfterUpload.names || [],
-      missing_count: (vanishedAfterUpload.names || []).length
-    }),
-    [vanishedAfterUpload]
+    () => dataHelper.computeReportingCompleteness(reportingData, activeEmployees, filterYear, filterMonth, filterWeek),
+    [reportingData, activeEmployees, filterYear, filterMonth, filterWeek]
   );
 
   // Approval Rate computed
@@ -2248,6 +2245,12 @@ const App = () => {
                 <div>
                   <h3 style={{ margin: 0 }}>{t.completenessTitle}</h3>
                   <p className="module-caption" style={{ marginTop: '6px' }}>{t.completenessMethodBDesc}</p>
+                  {(reportingCompleteness.checked_weeks || []).length > 0 && (
+                    <p className="module-caption" style={{ marginTop: '6px' }}>
+                      {lang === 'zh' ? '检查周次：' : 'Checked weeks: '}
+                      {(reportingCompleteness.checked_weeks || []).join(', ')}
+                    </p>
+                  )}
                 </div>
               </div>
               {(reportingCompleteness.missing_count ?? 0) > 0 ? (

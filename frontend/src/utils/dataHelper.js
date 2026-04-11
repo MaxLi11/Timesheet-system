@@ -230,20 +230,23 @@ export const computeReportingCompleteness = (
     filterMonth,
     filterWeek
 ) => {
-    if (!filterYear) {
+    // filterYear/filterMonth/filterWeek are intentionally ignored now.
+    // Completeness is based on latest upload and recent 4 weeks.
+    void filterYear;
+    void filterMonth;
+    void filterWeek;
+
+    if (!Array.isArray(entries) || entries.length === 0) {
         return {
             missing_employees: [],
-            missing_count: 0
+            missing_count: 0,
+            checked_weeks: []
         };
     }
-
-    const getMonthNum = (d) => String(d.month() + 1).padStart(2, '0');
-    const getWeekNum = (d) => String(d.isoWeek()).padStart(2, '0');
 
     // 在职员工集合（来自员工基础信息表）
     const activeSet = new Set((activeEmployees || []).map(item => (item.employee_name || '').trim()).filter(Boolean));
 
-    // 方式B：历史填报在职人员名单
     // 基数 = 历史上填过工时且当前仍在职的人
     const historicalFilers = new Set();
     entries.forEach(entry => {
@@ -256,23 +259,72 @@ export const computeReportingCompleteness = (
         ? new Set([...historicalFilers].filter(name => activeSet.has(name)))
         : historicalFilers;
 
-    // 检查这些人在选定时间段内是否填了工时
-    const submittedSetB = new Set();
+    const baselineSet = activeSet.size > 0
+        ? new Set([...historicalFilers].filter(name => activeSet.has(name)))
+        : historicalFilers;
+
+    if (baselineSet.size === 0) {
+        return {
+            missing_employees: [],
+            missing_count: 0,
+            checked_weeks: []
+        };
+    }
+
+    // 取最新4个有数据的周（按ISO周）
+    const weekDateMap = new Map();
     entries.forEach(entry => {
-        const employeeName = (entry.employee_name || '').trim();
-        if (!employeeName || !baselineSetB.has(employeeName)) return;
         const d = dayjs(entry.start_date);
-        if (String(d.year()) !== filterYear) return;
-        if (filterMonth && getMonthNum(d) !== filterMonth) return;
-        if (filterWeek && getWeekNum(d) !== filterWeek) return;
-        submittedSetB.add(employeeName);
+        if (!d.isValid()) return;
+        const weekStart = d.startOf('isoWeek');
+        const weekKey = `${weekStart.isoWeekYear()}-W${String(weekStart.isoWeek()).padStart(2, '0')}`;
+        weekDateMap.set(weekKey, weekStart.valueOf());
     });
 
-    const missingEmployees = [...baselineSetB].filter(name => !submittedSetB.has(name)).sort();
+    const checkedWeeks = [...weekDateMap.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([weekKey]) => weekKey);
+
+    if (checkedWeeks.length === 0) {
+        return {
+            missing_employees: [],
+            missing_count: 0,
+            checked_weeks: []
+        };
+    }
+
+    // 构建每周已填报人员集合
+    const submittedByWeek = new Map(checkedWeeks.map(week => [week, new Set()]));
+    entries.forEach(entry => {
+        const employeeName = (entry.employee_name || '').trim();
+        if (!employeeName || !baselineSet.has(employeeName)) return;
+        const d = dayjs(entry.start_date);
+        if (!d.isValid()) return;
+        const weekStart = d.startOf('isoWeek');
+        const weekKey = `${weekStart.isoWeekYear()}-W${String(weekStart.isoWeek()).padStart(2, '0')}`;
+        if (!submittedByWeek.has(weekKey)) return;
+        submittedByWeek.get(weekKey).add(employeeName);
+    });
+
+    // 只要最近4周里任意一周没出现，就判定为漏填
+    const missingEmployees = [];
+    for (const employeeName of baselineSet) {
+        let missed = false;
+        for (const week of checkedWeeks) {
+            if (!submittedByWeek.get(week).has(employeeName)) {
+                missed = true;
+                break;
+            }
+        }
+        if (missed) missingEmployees.push(employeeName);
+    }
+    missingEmployees.sort();
 
     return {
         missing_employees: missingEmployees,
-        missing_count: missingEmployees.length
+        missing_count: missingEmployees.length,
+        checked_weeks: checkedWeeks
     };
 };
 
