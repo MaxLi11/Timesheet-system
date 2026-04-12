@@ -835,7 +835,7 @@ const App = () => {
   t.personMonthRatioSubtitle = lang === 'zh'
     ? '按项目 + Close 口径，计算每位员工每月工时占比（需先上传工作周划分文件）。'
     : 'Per-project Close-scoped monthly ratio per employee. Requires work week file upload.';
-  t.completenessTitle = lang === 'zh' ? '填报完整性检查' : 'Reporting Completeness';
+  t.completenessTitle = lang === 'zh' ? '漏填检查' : 'Missing Submission Check';
   t.completenessBaseline = lang === 'zh' ? '基数人数' : 'Baseline Employees';
   t.completenessSubmitted = lang === 'zh' ? '本期已填报' : 'Submitted This Period';
   t.completenessMissing = lang === 'zh' ? '需补填人数' : 'Missing Employees';
