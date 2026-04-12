@@ -70,9 +70,8 @@ export const buildCustomProjectHoursExport = (entries = [], now = new Date()) =>
     .map((entry) => formatMonthKey(entry.start_date))
     .filter(Boolean)
     .sort(compareText);
-  const continuousMonths = monthKeys.length
-    ? buildContinuousMonths(monthKeys[0], monthKeys[monthKeys.length - 1])
-    : [];
+  // Only include months that actually have data (no gap-filling with zeros)
+  const continuousMonths = [...new Set(monthKeys)].sort(compareText);
 
   const groups = new Map();
   filteredEntries.forEach((entry) => {
@@ -111,8 +110,13 @@ export const buildCustomProjectHoursExport = (entries = [], now = new Date()) =>
   );
 
   const rows = sortedGroups.map((group) => {
-    const monthValues = continuousMonths.map((monthKey) => normalizeNumber(group.monthHours.get(monthKey) || 0));
-    const totalHours = normalizeNumber(monthValues.reduce((sum, value) => sum + Number(value || 0), 0));
+    const monthValues = continuousMonths.map((monthKey) => {
+      const val = group.monthHours.get(monthKey);
+      return val !== undefined ? normalizeNumber(val) : null; // null = blank cell
+    });
+    const totalHours = normalizeNumber(
+      [...group.monthHours.values()].reduce((sum, value) => sum + Number(value || 0), 0)
+    );
     return [
       group.project_name,
       group.employee_name,

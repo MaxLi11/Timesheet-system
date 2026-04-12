@@ -66,12 +66,27 @@ async def upload_timesheet(file: UploadFile = File(...), db: Session = Depends(g
     temp_path = _store_uploaded_file_temporarily(file)
 
     try:
-        entries = parser.parse_timesheet(temp_path)
+        parsed = parser.parse_timesheet(temp_path, include_metadata=True)
+        entries = parsed.get("entries", [])
         if not entries:
             raise HTTPException(status_code=400, detail="No valid data found in the Excel file.")
-            
+        employee_profiles = parsed.get("employee_profiles", [])
+
+        previous_employee_names = crud.get_distinct_employee_names_in_time_entries(db)
         count = crud.save_time_entries(db, entries)
-        return {"message": "Upload successful", "rows_processed": count}
+        employee_count = crud.save_employee_profiles(db, employee_profiles)
+        active_names = crud.get_active_employee_name_set(db)
+        vanished = crud.compute_vanished_after_upload(
+            previous_employee_names, entries, active_names
+        )
+        crud.save_vanished_after_upload(db, vanished)
+        return {
+            "message": "Upload successful",
+            "rows_processed": count,
+            "employees_processed": employee_count,
+            "vanished_count": len(vanished),
+            "vanished_employees": vanished,
+        }
     except Exception as e:
         # This block already exists for general exceptions during parsing/saving
         traceback.print_exc()
@@ -135,6 +150,14 @@ def clear_data(db: Session = Depends(get_db)):
     crud.clear_all_data(db)
     return {"message": "All data cleared successfully"}
 
+@app.get("/vanished-after-upload")
+def get_vanished_after_upload(db: Session = Depends(get_db)):
+    """
+    相对上一份上传：曾有工时行、本文件中完全没有出现的人员（按姓名，限在职）。
+    """
+    return crud.get_vanished_after_upload(db)
+
+
 @app.get("/reporting-rate")
 def get_reporting_rate(db: Session = Depends(get_db)):
     """
@@ -143,6 +166,14 @@ def get_reporting_rate(db: Session = Depends(get_db)):
     so we can reuse the same logic per period and target hours.
     """
     return crud.get_reporting_rate(db)
+
+
+@app.get("/active-employees")
+def get_active_employees(db: Session = Depends(get_db)):
+    """
+    Returns active employee roster for reporting completeness checks.
+    """
+    return crud.get_active_employees(db)
 
 @app.get("/approval-rate")
 def get_approval_rate(db: Session = Depends(get_db)):
@@ -196,3 +227,21 @@ def get_person_month_ratio(db: Session = Depends(get_db)):
     月份归属优先查工作周划分表，查不到则用自然月。
     """
     return crud.get_person_month_ratio(db)
+
+
+@app.get("/export-person-month-march")
+def export_person_month_march(db: Session = Depends(get_db)):
+    """
+    人月行军图：每项目每员工每月的工时、人月占比、当月总工时。
+    Close口径，category=Project。
+    """
+    return crud.get_person_month_march(db)
+
+
+@app.get("/export-employee-monthly-total")
+def export_employee_monthly_total(db: Session = Depends(get_db)):
+    """
+    每人每月总工时：每位员工各月所有项目工时总和。
+    Close口径，category=Project。
+    """
+    return crud.get_employee_monthly_total(db)

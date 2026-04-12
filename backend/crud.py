@@ -516,3 +516,109 @@ def get_person_month_ratio(db: Session):
     rows = sorted(result_map.values(), key=lambda r: (r["project_name"], r["employee_name"]))
 
     return {"months": all_months, "rows": rows}
+
+
+def get_person_month_march(db: Session):
+    """
+    人月行军图：每个项目每位员工每月的工时、人月占比、当月总工时。
+    只统计 current_node='Close' + category='Project'。
+    """
+    entries = db.query(database.TimeEntry).filter(
+        func.lower(database.TimeEntry.current_node) == "close",
+        database.TimeEntry.category == "Project"
+    ).all()
+
+    # 员工每月总工时
+    emp_month_total: dict = {}
+    for e in entries:
+        if not e.start_date:
+            continue
+        month = e.start_date.strftime("%Y-%m")
+        key = (e.employee_name, month)
+        emp_month_total[key] = emp_month_total.get(key, 0) + float(e.hours or 0)
+
+    # 项目×员工每月工时
+    proj_emp_month: dict = {}
+    emp_meta: dict = {}
+    for e in entries:
+        if not e.start_date:
+            continue
+        month = e.start_date.strftime("%Y-%m")
+        key = (e.project_name, e.employee_name, month)
+        proj_emp_month[key] = proj_emp_month.get(key, 0) + float(e.hours or 0)
+        if e.employee_name not in emp_meta:
+            emp_meta[e.employee_name] = {
+                "department_full": e.department_full or "",
+                "department": e.department or "",
+                "position": e.position or "",
+            }
+
+    all_months = sorted({m for (_, _, m) in proj_emp_month})
+
+    # 组装行数据
+    row_map: dict = {}
+    for (proj, emp, month), proj_hours in proj_emp_month.items():
+        total = emp_month_total.get((emp, month), 0)
+        ratio = round(proj_hours / total, 6) if total > 0 else 0
+        key = (proj, emp)
+        if key not in row_map:
+            meta = emp_meta.get(emp, {})
+            row_map[key] = {
+                "project_name": proj,
+                "employee_name": emp,
+                "department_full": meta.get("department_full", ""),
+                "department": meta.get("department", ""),
+                "position": meta.get("position", ""),
+                "months": {}
+            }
+        row_map[key]["months"][month] = {
+            "proj_hours": round(proj_hours, 2),
+            "ratio": ratio,
+            "total_hours": round(total, 2)
+        }
+
+    rows = sorted(row_map.values(), key=lambda r: (r["project_name"], r["employee_name"]))
+
+    # 汇总行：每月所有员工的合计
+    summary: dict = {}
+    for month in all_months:
+        s_proj = sum(v["months"].get(month, {}).get("proj_hours", 0) for v in rows)
+        s_ratio = sum(v["months"].get(month, {}).get("ratio", 0) for v in rows)
+        s_total = sum(h for (emp, m), h in emp_month_total.items() if m == month)
+        summary[month] = {
+            "proj_hours": round(s_proj, 3),
+            "ratio": round(s_ratio, 3),
+            "total_hours": round(s_total, 3)
+        }
+
+    return {"months": all_months, "rows": rows, "summary": summary}
+
+
+def get_employee_monthly_total(db: Session):
+    """
+    每人每月总工时：每位员工每月所有项目工时总和。
+    只统计 current_node='Close' + category='Project'。
+    """
+    entries = db.query(database.TimeEntry).filter(
+        func.lower(database.TimeEntry.current_node) == "close",
+        database.TimeEntry.category == "Project"
+    ).all()
+
+    emp_month: dict = {}
+    for e in entries:
+        if not e.start_date:
+            continue
+        month = e.start_date.strftime("%Y-%m")
+        key = (e.employee_name, month)
+        emp_month[key] = emp_month.get(key, 0) + float(e.hours or 0)
+
+    all_months = sorted({m for (_, m) in emp_month})
+    all_employees = sorted({emp for (emp, _) in emp_month})
+
+    rows = []
+    for emp in all_employees:
+        month_data = {m: round(emp_month[(emp, m)], 2) for m in all_months if (emp, m) in emp_month}
+        total = round(sum(month_data.values()), 2)
+        rows.append({"employee_name": emp, "months": month_data, "total": total})
+
+    return {"months": all_months, "rows": rows}

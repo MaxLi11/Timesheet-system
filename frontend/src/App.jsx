@@ -1112,6 +1112,92 @@ const App = () => {
     }
   };
 
+  const exportPersonMonthMarchExcel = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/export-person-month-march`);
+      if (!res.ok) throw new Error('获取数据失败');
+      const { months, rows, summary } = await res.json();
+      if (!rows || rows.length === 0) {
+        alert(lang === 'zh' ? '暂无数据，请先上传工时表。' : 'No data. Please upload timesheet first.');
+        return;
+      }
+      const baseHeaders = [
+        lang === 'zh' ? '项目名称' : 'Project',
+        lang === 'zh' ? '员工' : 'Employee',
+        lang === 'zh' ? '所属部门' : 'Department',
+        lang === 'zh' ? '部门简称' : 'Dept',
+        lang === 'zh' ? '职位' : 'Position',
+      ];
+      const subCol = lang === 'zh'
+        ? ['该项目该员工总工时', '人月', '当月总工时']
+        : ['Proj Hours', 'Ratio', 'Monthly Total'];
+      const totalCol = lang === 'zh' ? ['总计', '总计', '总计'] : ['Total', 'Total', 'Total'];
+
+      const summaryRow = [
+        '', '', '', '', '',
+        ...months.flatMap(m => [
+          summary[m]?.proj_hours ?? '',
+          summary[m]?.ratio ?? '',
+          summary[m]?.total_hours ?? ''
+        ]),
+        '', '', ''
+      ];
+      const headerRow1 = [...baseHeaders, ...months.flatMap(m => [m, m, m]), ...totalCol];
+      const headerRow2 = ['', '', '', '', '', ...months.flatMap(() => subCol), ...subCol];
+      const dataRows = rows.map(r => {
+        const totProjH = Object.values(r.months).reduce((s, d) => s + d.proj_hours, 0);
+        const totRatio = Object.values(r.months).reduce((s, d) => s + d.ratio, 0);
+        const totTotalH = Object.values(r.months).reduce((s, d) => s + d.total_hours, 0);
+        return [
+          r.project_name, r.employee_name, r.department_full, r.department, r.position,
+          ...months.flatMap(m => {
+            const d = r.months[m];
+            return d ? [d.proj_hours, d.ratio, d.total_hours] : ['', '', ''];
+          }),
+          parseFloat(totProjH.toFixed(2)),
+          parseFloat(totRatio.toFixed(6)),
+          parseFloat(totTotalH.toFixed(2)),
+        ];
+      });
+      const ws = XLSX.utils.aoa_to_sheet([summaryRow, headerRow1, headerRow2, ...dataRows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, lang === 'zh' ? '人月行军图' : 'March Chart');
+      const now = new Date();
+      const pad = v => String(v).padStart(2, '0');
+      XLSX.writeFile(wb, `${lang === 'zh' ? '人月行军图' : 'person_month_march'}_Close_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}.xlsx`);
+    } catch (err) {
+      alert(`${lang === 'zh' ? '导出失败' : 'Export failed'}: ${err.message}`);
+    }
+  };
+
+  const exportEmployeeMonthlyTotalExcel = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/export-employee-monthly-total`);
+      if (!res.ok) throw new Error('获取数据失败');
+      const { months, rows } = await res.json();
+      if (!rows || rows.length === 0) {
+        alert(lang === 'zh' ? '暂无数据，请先上传工时表。' : 'No data. Please upload timesheet first.');
+        return;
+      }
+      const nameCol = lang === 'zh' ? '姓名' : 'Employee';
+      const totalCol = lang === 'zh' ? '总计' : 'Total';
+      const headers = [nameCol, ...months, totalCol];
+      const dataRows = rows.map(r => [
+        r.employee_name,
+        ...months.map(m => r.months[m] ?? ''),
+        r.total
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, lang === 'zh' ? '每人每月总工时' : 'Monthly Total');
+      const now = new Date();
+      const pad = v => String(v).padStart(2, '0');
+      XLSX.writeFile(wb, `${lang === 'zh' ? '每人每月总工时' : 'employee_monthly_total'}_Close_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}.xlsx`);
+    } catch (err) {
+      alert(`${lang === 'zh' ? '导出失败' : 'Export failed'}: ${err.message}`);
+    }
+  };
+
   const handleProjectScheduleUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -2092,6 +2178,40 @@ const App = () => {
                 </div>
                 <button type="button" className="export-btn" style={actionButtonStyle} onClick={exportPersonMonthRatioExcel}>
                   <FileDown size={16} /> {t.exportPersonMonthRatio}
+                </button>
+              </div>
+            </div>
+
+            {/* 人月行军图导出 */}
+            <div className="card custom-data-card elevated-module">
+              <div className="card-heading-row">
+                <div>
+                  <h3>{lang === 'zh' ? '人月行军图导出' : 'Person-Month March Chart Export'}</h3>
+                  <p className="module-caption">
+                    {lang === 'zh'
+                      ? '每项目每员工每月：项目工时 + 人月占比 + 当月总工时，Close口径'
+                      : 'Per project/employee/month: hours + ratio + monthly total, Close only'}
+                  </p>
+                </div>
+                <button type="button" className="export-btn" style={actionButtonStyle} onClick={exportPersonMonthMarchExcel}>
+                  <FileDown size={16} /> {lang === 'zh' ? '导出行军图' : 'Export March Chart'}
+                </button>
+              </div>
+            </div>
+
+            {/* 每人每月总工时导出 */}
+            <div className="card custom-data-card elevated-module">
+              <div className="card-heading-row">
+                <div>
+                  <h3>{lang === 'zh' ? '每人每月总工时导出' : 'Employee Monthly Total Hours Export'}</h3>
+                  <p className="module-caption">
+                    {lang === 'zh'
+                      ? '每位员工各月项目总工时汇总，Close口径'
+                      : 'Total project hours per employee per month, Close only'}
+                  </p>
+                </div>
+                <button type="button" className="export-btn" style={actionButtonStyle} onClick={exportEmployeeMonthlyTotalExcel}>
+                  <FileDown size={16} /> {lang === 'zh' ? '导出总工时' : 'Export Total Hours'}
                 </button>
               </div>
             </div>
