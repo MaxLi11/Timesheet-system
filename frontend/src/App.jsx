@@ -2225,17 +2225,19 @@ const App = () => {
                 <div>
                   <h3 style={{ margin: 0 }}>{t.completenessTitle}</h3>
                   <p className="module-caption" style={{ marginTop: '6px' }}>{t.completenessMethodBDesc}</p>
-                  {(reportingCompleteness.checked_weeks || []).length > 0 && (
-                    <p className="module-caption" style={{ marginTop: '6px' }}>
-                      {lang === 'zh' ? '检查周次：' : 'Checked weeks: '}
-                      {(reportingCompleteness.checked_weeks || []).join(', ')}
-                    </p>
-                  )}
                 </div>
                 <button
                   onClick={() => {
-                    const missingList = reportingCompleteness.missing_employees || [];
-                    const rows = missingList.map((name, idx) => ({ [lang === 'zh' ? '序号' : 'No.']: idx + 1, [lang === 'zh' ? '员工姓名' : 'Employee Name']: name }));
+                    // 构建表格：周次 + 漏填人员
+                    const weeksMissing = reportingCompleteness.weeks_missing || {};
+                    const rows = [];
+                    for (const week of (reportingCompleteness.checked_weeks || [])) {
+                      const missing = weeksMissing[week] || [];
+                      rows.push({
+                        [lang === 'zh' ? '周次' : 'Week']: week,
+                        [lang === 'zh' ? '漏填人员' : 'Missing Employees']: missing.join(', ')
+                      });
+                    }
                     const ws = XLSX.utils.json_to_sheet(rows);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, lang === 'zh' ? '漏填名单' : 'Missing');
@@ -2246,12 +2248,26 @@ const App = () => {
                   {lang === 'zh' ? '导出 Excel' : 'Export Excel'}
                 </button>
               </div>
-              {(reportingCompleteness.missing_count ?? 0) > 0 ? (
-                <div className="module-caption" style={{ marginTop: '0.5rem' }}>
-                  {t.completenessMissingList}: {(reportingCompleteness.missing_employees ?? []).slice(0, 50).join(', ')}
+              {(reportingCompleteness.checked_weeks || []).length > 0 ? (
+                <div style={{ marginTop: '0.5rem' }}>
+                  {(reportingCompleteness.checked_weeks || []).map(week => {
+                    const missing = (reportingCompleteness.weeks_missing || {})[week] || [];
+                    return (
+                      <div key={week} style={{ marginBottom: '0.8rem', paddingBottom: '0.8rem', borderBottom: '1px solid #e8e8e8' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '0.3rem', color: '#333' }}>
+                          {week}: {missing.length > 0 ? `${missing.length} ${lang === 'zh' ? '人漏填' : 'missing'}` : (lang === 'zh' ? '无漏填' : 'No missing')}
+                        </div>
+                        {missing.length > 0 && (
+                          <div className="module-caption" style={{ marginTop: '0.3rem' }}>
+                            {missing.slice(0, 30).join(', ')}{missing.length > 30 ? '...' : ''}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="module-caption" style={{ marginTop: '0.5rem' }}>{t.completenessNoMissing}</div>
+                <div className="module-caption" style={{ marginTop: '0.5rem' }}>{lang === 'zh' ? '暂无数据' : 'No data'}</div>
               )}
             </div>
           </div>
