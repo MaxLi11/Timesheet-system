@@ -2220,54 +2220,61 @@ const App = () => {
               ))
             )}
 
-            <div className="card table-card" style={{ marginBottom: '0.9rem' }}>
-              <div className="card-heading-row">
+            <div style={{ marginBottom: '0.9rem' }}>
+              <div className="card-heading-row" style={{ marginBottom: '0.5rem' }}>
                 <div>
                   <h3 style={{ margin: 0 }}>{t.completenessTitle}</h3>
                   <p className="module-caption" style={{ marginTop: '6px' }}>{t.completenessMethodBDesc}</p>
                 </div>
                 <button
+                  className="export-btn"
                   onClick={() => {
-                    // 构建表格：周次 + 漏填人员
-                    const weeksMissing = reportingCompleteness.weeks_missing || {};
-                    const rows = [];
-                    for (const week of (reportingCompleteness.checked_weeks || [])) {
-                      const missing = weeksMissing[week] || [];
-                      rows.push({
-                        [lang === 'zh' ? '周次' : 'Week']: week,
-                        [lang === 'zh' ? '漏填人员' : 'Missing Employees']: missing.join(', ')
-                      });
-                    }
+                    const rows = (reportingCompleteness.missing_employees || []).map((name, idx) => ({
+                      [lang === 'zh' ? '序号' : 'No.']: idx + 1,
+                      [lang === 'zh' ? '部门' : 'Department']: Object.entries(reportingCompleteness.missing_by_dept || {}).find(([, names]) => names.includes(name))?.[0] || '',
+                      [lang === 'zh' ? '员工姓名' : 'Employee Name']: name,
+                    }));
                     const ws = XLSX.utils.json_to_sheet(rows);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, lang === 'zh' ? '漏填名单' : 'Missing');
-                    XLSX.writeFile(wb, `${lang === 'zh' ? '完整填报率漏填名单' : 'missing_employees'}_${new Date().toISOString().split('T')[0]}.xlsx`);
+                    const periodLabel = filterWeek || filterMonth || filterYear || 'all';
+                    XLSX.writeFile(wb, `${lang === 'zh' ? '漏填名单' : 'missing_employees'}_${periodLabel}.xlsx`);
                   }}
-                  style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', cursor: 'pointer' }}
                 >
-                  {lang === 'zh' ? '导出 Excel' : 'Export Excel'}
+                  <FileDown size={16} /> {lang === 'zh' ? '导出 Excel' : 'Export Excel'}
                 </button>
               </div>
-              {(reportingCompleteness.checked_weeks || []).length > 0 ? (
-                <div style={{ marginTop: '0.5rem' }}>
-                  {(reportingCompleteness.checked_weeks || []).map(week => {
-                    const missing = (reportingCompleteness.weeks_missing || {})[week] || [];
-                    return (
-                      <div key={week} style={{ marginBottom: '0.8rem', paddingBottom: '0.8rem', borderBottom: '1px solid #e8e8e8' }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: '0.3rem', color: '#333' }}>
-                          {week}: {missing.length > 0 ? `${missing.length} ${lang === 'zh' ? '人漏填' : 'missing'}` : (lang === 'zh' ? '无漏填' : 'No missing')}
-                        </div>
-                        {missing.length > 0 && (
-                          <div className="module-caption" style={{ marginTop: '0.3rem' }}>
-                            {missing.slice(0, 30).join(', ')}{missing.length > 30 ? '...' : ''}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+
+              {(reportingCompleteness.missing_count ?? 0) === 0 ? (
+                <div className="card no-issues table-card">{t.completenessNoMissing}</div>
               ) : (
-                <div className="module-caption" style={{ marginTop: '0.5rem' }}>{lang === 'zh' ? '暂无数据' : 'No data'}</div>
+                Object.entries(reportingCompleteness.missing_by_dept || {}).sort(([a], [b]) => a.localeCompare(b)).map(([dept, names]) => (
+                  <div key={dept} className="dept-accordion">
+                    <div className="dept-header" onClick={() => toggleDept(`missing-${dept}`)}>
+                      <div className="dept-name">
+                        {expandedDepts.has(`missing-${dept}`) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        <strong>{dept}</strong>
+                        <span className="emp-count">({names.length} {lang === 'zh' ? '人漏填' : 'missing'})</span>
+                      </div>
+                    </div>
+                    {expandedDepts.has(`missing-${dept}`) && (
+                      <div className="emp-table-wrap">
+                        <table className="emp-table">
+                          <thead>
+                            <tr>
+                              <th>{lang === 'zh' ? '员工姓名' : 'Employee Name'}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {names.map((name, i) => (
+                              <tr key={i}><td>{name}</td></tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                ))
               )}
             </div>
           </div>

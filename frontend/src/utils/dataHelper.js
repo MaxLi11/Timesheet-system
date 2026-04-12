@@ -230,22 +230,13 @@ export const computeReportingCompleteness = (
     filterMonth,
     filterWeek
 ) => {
-    // 筛选参数暂时不用，始终显示最近4周的每周漏填情况
-    void filterYear;
-    void filterMonth;
-    void filterWeek;
-
-    if (!Array.isArray(entries) || entries.length === 0) {
-        return {
-            weeks_missing: {},  // { '2026-W15': ['员工A', '员工B'], '2026-W14': ['员工C'] }
-            checked_weeks: []
-        };
-    }
+    const empty = { missing_by_dept: {}, missing_employees: [], missing_count: 0 };
+    if (!Array.isArray(entries) || entries.length === 0) return empty;
 
     // 在职员工集合（来自员工基础信息表）
     const activeSet = new Set((activeEmployees || []).map(item => (item.employee_name || '').trim()).filter(Boolean));
 
-    // 基数 = 历史上填过工时且当前仍在职的人
+    // 基数 = 历史上填过工时且当前仍在职的人（用全量 entries 取，不受筛选影响）
     const historicalFilers = new Set();
     entries.forEach(entry => {
         const employeeName = (entry.employee_name || '').trim();
@@ -256,65 +247,56 @@ export const computeReportingCompleteness = (
         ? new Set([...historicalFilers].filter(name => activeSet.has(name)))
         : historicalFilers;
 
-    if (baselineSet.size === 0) {
-        return {
-            weeks_missing: {},
-            checked_weeks: []
-        };
-    }
+    if (baselineSet.size === 0) return empty;
 
-    // 取最新4个有数据的周（按ISO周）
-    const weekDateMap = new Map();
+    // 从全量 entries 中建立员工 → 部门的映射（取最近一条记录的部门）
+    const empDeptMap = {};
     entries.forEach(entry => {
-        const d = dayjs(entry.start_date);
-        if (!d.isValid()) return;
-        const weekStart = d.startOf('isoWeek');
-        const weekKey = `${weekStart.isoWeekYear()}-W${String(weekStart.isoWeek()).padStart(2, '0')}`;
-        weekDateMap.set(weekKey, weekStart.valueOf());
+        const name = (entry.employee_name || '').trim();
+        if (name && !empDeptMap[name]) {
+            empDeptMap[name] = (entry.department || '').trim() || 'Unknown';
+        }
     });
 
-    const checkedWeeks = [...weekDateMap.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 4)
-        .map(([weekKey]) => weekKey);
-
-    if (checkedWeeks.length === 0) {
-        return {
-            weeks_missing: {},
-            checked_weeks: []
-        };
-    }
-
-    // 构建每周已填报人员集合
-    const submittedByWeek = new Map(checkedWeeks.map(week => [week, new Set()]));
+    // 按筛选范围过滤，找出该范围内有填报记录的人
+    const submittedSet = new Set();
     entries.forEach(entry => {
         const employeeName = (entry.employee_name || '').trim();
         if (!employeeName || !baselineSet.has(employeeName)) return;
-        const d = dayjs(entry.start_date);
-        if (!d.isValid()) return;
-        const weekStart = d.startOf('isoWeek');
-        const weekKey = `${weekStart.isoWeekYear()}-W${String(weekStart.isoWeek()).padStart(2, '0')}`;
-        if (!submittedByWeek.has(weekKey)) return;
-        submittedByWeek.get(weekKey).add(employeeName);
-    });
 
-    // 计算每周的漏填人员
-    const weeksMissing = {};
-    for (const week of checkedWeeks) {
-        const submittedSet = submittedByWeek.get(week);
-        const missingForWeek = [];
-        for (const employeeName of baselineSet) {
-            if (!submittedSet.has(employeeName)) {
-                missingForWeek.push(employeeName);
+        if (filterYear || filterMonth || filterWeek) {
+            const d = dayjs(entry.start_date);
+            if (!d.isValid()) return;
+            if (filterYear && d.year().toString() !== filterYear) return;
+            if (filterMonth) {
+                const [fYear, fMonth] = filterMonth.split('-');
+                if (d.year().toString() !== fYear || (d.month() + 1).toString().padStart(2, '0') !== fMonth) return;
+            }
+            if (filterWeek) {
+                // filterWeek 格式: '2026-W15'
+                const [wYear, wTag] = filterWeek.split('-W');
+                if (d.isoWeekYear().toString() !== wYear || d.isoWeek().toString().padStart(2, '0') !== wTag) return;
             }
         }
-        missingForWeek.sort();
-        weeksMissing[week] = missingForWeek;
-    }
+
+        submittedSet.add(employeeName);
+    });
+
+    // 漏填 = 在基数中但在筛选范围内没有任何填报记录
+    const missingEmployees = [...baselineSet].filter(name => !submittedSet.has(name)).sort();
+
+    // 按部门分组
+    const missingByDept = {};
+    missingEmployees.forEach(name => {
+        const dept = empDeptMap[name] || 'Unknown';
+        if (!missingByDept[dept]) missingByDept[dept] = [];
+        missingByDept[dept].push(name);
+    });
 
     return {
-        weeks_missing: weeksMissing,
-        checked_weeks: checkedWeeks
+        missing_by_dept: missingByDept,
+        missing_employees: missingEmployees,
+        missing_count: missingEmployees.length
     };
 };
 
