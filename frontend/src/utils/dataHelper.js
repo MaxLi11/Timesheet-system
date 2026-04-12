@@ -259,6 +259,9 @@ export const computeReportingCompleteness = (
     });
 
     // 按筛选范围过滤，找出该范围内有填报记录的人
+    // filterWeek 格式: '13'（ISO周号，两位字符串）
+    // filterMonth 格式: '2026-03'
+    // filterYear 格式: '2026'
     const submittedSet = new Set();
     entries.forEach(entry => {
         const employeeName = (entry.employee_name || '').trim();
@@ -273,9 +276,8 @@ export const computeReportingCompleteness = (
                 if (d.year().toString() !== fYear || (d.month() + 1).toString().padStart(2, '0') !== fMonth) return;
             }
             if (filterWeek) {
-                // filterWeek 格式: '2026-W15'
-                const [wYear, wTag] = filterWeek.split('-W');
-                if (d.isoWeekYear().toString() !== wYear || d.isoWeek().toString().padStart(2, '0') !== wTag) return;
+                // filterWeek 是纯数字字符串如 '13'，与 isoWeek() 直接比较
+                if (d.isoWeek().toString().padStart(2, '0') !== filterWeek) return;
             }
         }
 
