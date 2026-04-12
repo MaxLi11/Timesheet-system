@@ -230,12 +230,6 @@ export const computeReportingCompleteness = (
     filterMonth,
     filterWeek
 ) => {
-    // filterYear/filterMonth/filterWeek are intentionally ignored now.
-    // Completeness is based on latest upload and recent 4 weeks.
-    void filterYear;
-    void filterMonth;
-    void filterWeek;
-
     if (!Array.isArray(entries) || entries.length === 0) {
         return {
             missing_employees: [],
@@ -254,11 +248,6 @@ export const computeReportingCompleteness = (
         if (employeeName) historicalFilers.add(employeeName);
     });
 
-    // 如果有在职员工表，则只保留其中仍在职的人（排除已离职）
-    const baselineSetB = activeSet.size > 0
-        ? new Set([...historicalFilers].filter(name => activeSet.has(name)))
-        : historicalFilers;
-
     const baselineSet = activeSet.size > 0
         ? new Set([...historicalFilers].filter(name => activeSet.has(name)))
         : historicalFilers;
@@ -271,20 +260,61 @@ export const computeReportingCompleteness = (
         };
     }
 
-    // 取最新4个有数据的周（按ISO周）
-    const weekDateMap = new Map();
-    entries.forEach(entry => {
-        const d = dayjs(entry.start_date);
-        if (!d.isValid()) return;
-        const weekStart = d.startOf('isoWeek');
-        const weekKey = `${weekStart.isoWeekYear()}-W${String(weekStart.isoWeek()).padStart(2, '0')}`;
-        weekDateMap.set(weekKey, weekStart.valueOf());
-    });
+    // 根据用户筛选条件确定要检查的周
+    let checkedWeeks = [];
 
-    const checkedWeeks = [...weekDateMap.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 4)
-        .map(([weekKey]) => weekKey);
+    if (filterWeek) {
+        // 用户选了具体的周，直接用这一周
+        checkedWeeks = [filterWeek];
+    } else if (filterMonth) {
+        // 用户选了月，提取该月的所有周
+        const [monthYear, monthNum] = filterMonth.split('-');
+        const monthDate = dayjs(`${monthYear}-${monthNum}-01`);
+        const startDay = monthDate.startOf('month');
+        const endDay = monthDate.endOf('month');
+
+        const monthWeeks = new Set();
+        let current = startDay;
+        while (current.isBefore(endDay) || current.isSame(endDay)) {
+            const weekStart = current.startOf('isoWeek');
+            const weekKey = `${weekStart.isoWeekYear()}-W${String(weekStart.isoWeek()).padStart(2, '0')}`;
+            monthWeeks.add(weekKey);
+            current = current.add(1, 'day');
+        }
+
+        checkedWeeks = [...monthWeeks].sort();
+    } else if (filterYear) {
+        // 用户选了年，提取该年的所有周
+        const yearDate = dayjs(filterYear);
+        const startDay = yearDate.startOf('year');
+        const endDay = yearDate.endOf('year');
+
+        const yearWeeks = new Set();
+        let current = startDay;
+        while (current.isBefore(endDay) || current.isSame(endDay)) {
+            const weekStart = current.startOf('isoWeek');
+            const weekKey = `${weekStart.isoWeekYear()}-W${String(weekStart.isoWeek()).padStart(2, '0')}`;
+            yearWeeks.add(weekKey);
+            current = current.add(1, 'day');
+        }
+
+        checkedWeeks = [...yearWeeks].sort();
+    } else {
+        // 没有任何筛选，取最新4个有数据的周
+        const weekDateMap = new Map();
+        entries.forEach(entry => {
+            const d = dayjs(entry.start_date);
+            if (!d.isValid()) return;
+            const weekStart = d.startOf('isoWeek');
+            const weekKey = `${weekStart.isoWeekYear()}-W${String(weekStart.isoWeek()).padStart(2, '0')}`;
+            weekDateMap.set(weekKey, weekStart.valueOf());
+        });
+
+        checkedWeeks = [...weekDateMap.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 4)
+            .map(([weekKey]) => weekKey);
+    }
 
     if (checkedWeeks.length === 0) {
         return {
@@ -307,7 +337,7 @@ export const computeReportingCompleteness = (
         submittedByWeek.get(weekKey).add(employeeName);
     });
 
-    // 只要最近4周里任意一周没出现，就判定为漏填
+    // 只要检查周里任意一周没出现，就判定为漏填
     const missingEmployees = [];
     for (const employeeName of baselineSet) {
         let missed = false;
