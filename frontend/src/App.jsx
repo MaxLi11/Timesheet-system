@@ -2220,26 +2220,6 @@ const App = () => {
               ))
             )}
 
-            <div className="card table-card" style={{ marginTop: '0.9rem', marginBottom: '0.9rem' }}>
-              <div className="card-heading-row">
-                <div>
-                  <h3 style={{ margin: 0 }}>{t.vanishedUploadTitle}</h3>
-                  <p className="module-caption" style={{ marginTop: '6px' }}>{t.vanishedUploadSubtitle}</p>
-                </div>
-                <div className="inline-summary-stats">
-                  <span className="stat-item danger">{t.vanishedUploadCount} <strong>{vanishedAfterUpload.names.length}</strong></span>
-                </div>
-              </div>
-              {vanishedAfterUpload.names.length > 0 ? (
-                <div className="module-caption" style={{ marginTop: '0.5rem' }}>
-                  {t.vanishedUploadList}: {vanishedAfterUpload.names.slice(0, 40).join(', ')}
-                  {vanishedAfterUpload.names.length > 40 ? '…' : ''}
-                </div>
-              ) : (
-                <div className="module-caption" style={{ marginTop: '0.5rem' }}>{t.vanishedUploadEmpty}</div>
-              )}
-            </div>
-
             <div className="card table-card" style={{ marginBottom: '0.9rem' }}>
               <div className="card-heading-row">
                 <div>
@@ -2252,6 +2232,19 @@ const App = () => {
                     </p>
                   )}
                 </div>
+                <button
+                  onClick={() => {
+                    const missingList = reportingCompleteness.missing_employees || [];
+                    const rows = missingList.map((name, idx) => ({ [lang === 'zh' ? '序号' : 'No.']: idx + 1, [lang === 'zh' ? '员工姓名' : 'Employee Name']: name }));
+                    const ws = XLSX.utils.json_to_sheet(rows);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, lang === 'zh' ? '漏填名单' : 'Missing');
+                    XLSX.writeFile(wb, `${lang === 'zh' ? '完整填报率漏填名单' : 'missing_employees'}_${new Date().toISOString().split('T')[0]}.xlsx`);
+                  }}
+                  style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', cursor: 'pointer' }}
+                >
+                  {lang === 'zh' ? '导出 Excel' : 'Export Excel'}
+                </button>
               </div>
               {(reportingCompleteness.missing_count ?? 0) > 0 ? (
                 <div className="module-caption" style={{ marginTop: '0.5rem' }}>
