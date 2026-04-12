@@ -676,6 +676,9 @@ const App = () => {
   const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterWeek, setFilterWeek] = useState('');
+  const [completenessYear, setCompletenessYear] = useState('');
+  const [completenessMonth, setCompletenessMonth] = useState('');
+  const [completenessWeek, setCompletenessWeek] = useState('');
   const [expandedDepts, setExpandedDepts] = useState(new Set());
   // Approval Rate state
   const [approvalData, setApprovalData] = useState([]);
@@ -1168,11 +1171,17 @@ const App = () => {
       const latestYear = periodOptions.years[periodOptions.years.length - 1];
       setFilterYear(latestYear);
     }
-  }, [periodOptions.years, filterYear]);
+    if (periodOptions.years.length > 0 && !completenessYear) {
+      const latestYear = periodOptions.years[periodOptions.years.length - 1];
+      setCompletenessYear(latestYear);
+    }
+  }, [periodOptions.years, filterYear, completenessYear]);
 
   // Reset month/week when year changes
   const handleYearChange = (y) => { setFilterYear(y); setFilterMonth(''); setFilterWeek(''); };
   const handleMonthChange = (m) => { setFilterMonth(m); setFilterWeek(''); };
+  const handleCompletenessYearChange = (y) => { setCompletenessYear(y); setCompletenessMonth(''); setCompletenessWeek(''); };
+  const handleCompletenessMonthChange = (m) => { setCompletenessMonth(m); setCompletenessWeek(''); };
 
   const reportingRecords = useMemo(() =>
     dataHelper.computeReportingRate(reportingData, filterYear, filterMonth, filterWeek, Number(targetHours)),
@@ -1185,8 +1194,8 @@ const App = () => {
   );
 
   const reportingCompleteness = useMemo(
-    () => dataHelper.computeReportingCompleteness(reportingData, activeEmployees, filterYear, filterMonth, filterWeek),
-    [reportingData, activeEmployees, filterYear, filterMonth, filterWeek]
+    () => dataHelper.computeReportingCompleteness(reportingData, activeEmployees, completenessYear, completenessMonth, completenessWeek),
+    [reportingData, activeEmployees, completenessYear, completenessMonth, completenessWeek]
   );
 
   // Approval Rate computed
@@ -2237,12 +2246,44 @@ const App = () => {
                     const ws = XLSX.utils.json_to_sheet(rows);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, lang === 'zh' ? '漏填名单' : 'Missing');
-                    const periodLabel = filterWeek || filterMonth || filterYear || 'all';
+                    const periodLabel = completenessWeek || completenessMonth || completenessYear || 'all';
                     XLSX.writeFile(wb, `${lang === 'zh' ? '漏填名单' : 'missing_employees'}_${periodLabel}.xlsx`);
                   }}
                 >
                   <FileDown size={16} /> {lang === 'zh' ? '导出 Excel' : 'Export Excel'}
                 </button>
+              </div>
+
+              {/* 独立筛选器 */}
+              <div className="reporting-filters" style={{ marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div className="filter-group">
+                  <label>{t.selectYear}</label>
+                  <select value={completenessYear} onChange={e => handleCompletenessYearChange(e.target.value)}>
+                    {periodOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                {completenessYear && (
+                  <div className="filter-group">
+                    <label>{t.selectMonth}</label>
+                    <select value={completenessMonth} onChange={e => handleCompletenessMonthChange(e.target.value)}>
+                      <option value="">{t.allMonths}</option>
+                      {(periodOptions.monthsByYear[completenessYear] || []).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {completenessMonth && (
+                  <div className="filter-group">
+                    <label>{t.selectWeek}</label>
+                    <select value={completenessWeek} onChange={e => setCompletenessWeek(e.target.value)}>
+                      <option value="">{t.allWeeks}</option>
+                      {(periodOptions.weeksByMonth[`${completenessYear}-${completenessMonth}`] || []).map(w => (
+                        <option key={w.week} value={w.week}>{w.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {(reportingCompleteness.missing_count ?? 0) === 0 ? (
