@@ -225,37 +225,34 @@ export const computeReportingRate = (entries, filterYear, filterMonth, filterWee
 
 export const computeReportingCompleteness = (
     entries,
-    activeEmployees,
+    activeEmployees,       // 保留参数签名兼容性，但实际不依赖（employees表为空）
     filterYear,
     filterMonth,
     filterWeek
 ) => {
     const empty = { missing_by_dept: {}, missing_employees: [], missing_count: 0 };
+    if (!Array.isArray(entries) || entries.length === 0) return empty;
 
-    // 基数：在职员工表（activeEmployees）中的所有在职员工
-    // activeEmployees 来自 /active-employees，已排除离职人员
-    const activeList = (activeEmployees || []).map(item => ({
-        name: (item.employee_name || '').trim(),
-        dept: (item.department_full || '').trim() || 'Unknown'
-    })).filter(item => item.name);
-
-    if (activeList.length === 0) return empty;
-
-    // 从 entries 中建立员工 → 部门的补充映射（activeEmployees 里 dept 可能为空时用）
-    const empDeptFromEntries = {};
-    (entries || []).forEach(entry => {
+    // 基数：从全量 entries（/reporting-rate 全部记录）中取所有出现过的员工
+    // entries 后端已排除离职人员（_active_entry_filter）和"未提交"状态
+    // 因此历史上在 entries 中出现过的人 = 历史在职且填报过的人
+    const empDeptMap = {};  // name -> dept
+    entries.forEach(entry => {
         const name = (entry.employee_name || '').trim();
-        if (name && !empDeptFromEntries[name]) {
-            empDeptFromEntries[name] = (entry.department || '').trim() || 'Unknown';
+        if (name && !empDeptMap[name]) {
+            empDeptMap[name] = (entry.department || '').trim() || 'Unknown';
         }
     });
 
+    const baselineNames = Object.keys(empDeptMap); // 历史所有填过的在职员工
+    if (baselineNames.length === 0) return empty;
+
     // 按筛选范围过滤，找出该范围内有填报记录的人
     // filterYear  格式: '2026'
-    // filterMonth 格式: '03'（两位月份数字，与 filterYear 配合使用）
-    // filterWeek  格式: '13'（两位ISO周号，与 filterYear+filterMonth 配合使用）
+    // filterMonth 格式: '03'（两位月份数字）
+    // filterWeek  格式: '13'（两位ISO周号）
     const submittedSet = new Set();
-    (entries || []).forEach(entry => {
+    entries.forEach(entry => {
         const employeeName = (entry.employee_name || '').trim();
         if (!employeeName) return;
 
@@ -270,16 +267,15 @@ export const computeReportingCompleteness = (
         submittedSet.add(employeeName);
     });
 
-    // 漏填 = 在职员工中，在筛选范围内没有任何填报记录的人
+    // 漏填 = 基数中，在筛选范围内没有任何填报记录的人
     const missingByDept = {};
     const missingEmployees = [];
 
-    activeList.forEach(({ name, dept }) => {
+    baselineNames.forEach(name => {
         if (submittedSet.has(name)) return;
-        // 部门优先用 entries 里的，其次用 activeEmployees 里的
-        const resolvedDept = empDeptFromEntries[name] || dept || 'Unknown';
-        if (!missingByDept[resolvedDept]) missingByDept[resolvedDept] = [];
-        missingByDept[resolvedDept].push(name);
+        const dept = empDeptMap[name] || 'Unknown';
+        if (!missingByDept[dept]) missingByDept[dept] = [];
+        missingByDept[dept].push(name);
         missingEmployees.push(name);
     });
 
