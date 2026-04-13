@@ -659,7 +659,7 @@ const App = () => {
   // Global dashboard filters
   const [dashYear, setDashYear] = useState('');
   const [dashMonth, setDashMonth] = useState('');
-  const [dashWeek, setDashWeek] = useState('');
+  const [dashWeek, setDashWeek] = useState(null); // null or {week_code, week_start, week_end, work_month}
   const [dashGranularity, setDashGranularity] = useState('monthly');
   const [dashSelectedDepts, setDashSelectedDepts] = useState(new Set());
   const [dashSelectedProjects, setDashSelectedProjects] = useState(new Set());
@@ -1414,7 +1414,10 @@ const App = () => {
         const itemDate = dayjs(item.start_date);
         if (dashYear && itemDate.year().toString() !== dashYear) return false;
         if (dashMonth && (itemDate.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
-        if (dashWeek && itemDate.isoWeek().toString().padStart(2, '0') !== dashWeek) return false;
+        if (dashWeek && dashWeek.week_start) {
+          if (itemDate.isBefore(dayjs(dashWeek.week_start), 'day') ||
+              itemDate.isAfter(dayjs(dashWeek.week_end), 'day')) return false;
+        }
       }
       // Dept & Project multi-select
       if (dashSelectedDepts.size > 0 && !dashSelectedDepts.has(item.department)) return false;
@@ -1436,7 +1439,10 @@ const App = () => {
       const d = dayjs(item.start_date);
       if (dashYear && d.year().toString() !== dashYear) return false;
       if (dashMonth && (d.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
-      if (dashWeek && d.isoWeek().toString().padStart(2, '0') !== dashWeek) return false;
+      if (dashWeek && dashWeek.week_start) {
+        if (d.isBefore(dayjs(dashWeek.week_start), 'day') ||
+            d.isAfter(dayjs(dashWeek.week_end), 'day')) return false;
+      }
       return true;
     });
     return Array.from(new Set(timeFiltered.map(i => i.department).filter(Boolean))).sort();
@@ -1456,7 +1462,10 @@ const App = () => {
         const d = dayjs(item.start_date);
         if (dashYear && d.year().toString() !== dashYear) return false;
         if (dashMonth && (d.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
-        if (dashWeek && d.isoWeek().toString().padStart(2, '0') !== dashWeek) return false;
+        if (dashWeek && dashWeek.week_start) {
+          if (d.isBefore(dayjs(dashWeek.week_start), 'day') ||
+              d.isAfter(dayjs(dashWeek.week_end), 'day')) return false;
+        }
       }
       if (dashSelectedDepts.size > 0 && !dashSelectedDepts.has(item.department)) return false;
       return true;
@@ -1499,7 +1508,7 @@ const App = () => {
   ), [dashMonth, dashSelectedDepts.size, dashSelectedProjects.size, dashWeek, dashYear]);
 
   const overviewTimeframeLabel = useMemo(() => {
-    if (dashYear && dashMonth && dashWeek) return `${dashYear}-${dashMonth} / W${dashWeek}`;
+    if (dashYear && dashMonth && dashWeek) return `${dashYear}-${dashMonth} / ${dashWeek.week_code || dashWeek}`;
     if (dashYear && dashMonth) return `${dashYear}-${dashMonth}`;
     if (dashYear) return dashYear;
     return uiText.allPeriods;
@@ -1618,7 +1627,7 @@ const App = () => {
   };
 
   const trendChartOpt = useMemo(() => {
-    const agg = dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity);
+    const agg = dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity, workWeeks);
     // The structure of `agg` from dataHelper.aggregateProjectData is expected to be:
     // { projects: [...], labels: [...], series: [...] }
     // The instruction provided `const projNames = Object.keys(agg); const periods = Array.from(new Set(projNames.flatMap(p => Object.keys(agg[p])))).sort();`
@@ -1996,7 +2005,7 @@ const App = () => {
               <div className="reporting-filters">
                 <div className="filter-group">
                   <label>{t.selectYear}</label>
-                  <select value={dashYear} onChange={e => { setDashYear(e.target.value); setDashMonth(''); setDashWeek(''); }}>
+                  <select value={dashYear} onChange={e => { setDashYear(e.target.value); setDashMonth(''); setDashWeek(null); }}>
                     <option value="">{t.allMonths}</option>
                     {dashPeriodOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
@@ -2005,7 +2014,7 @@ const App = () => {
                 {dashYear && (
                   <div className="filter-group">
                     <label>{t.selectMonth}</label>
-                    <select value={dashMonth} onChange={e => { setDashMonth(e.target.value); setDashWeek(''); }}>
+                    <select value={dashMonth} onChange={e => { setDashMonth(e.target.value); setDashWeek(null); }}>
                       <option value="">{t.allMonths}</option>
                       {(dashPeriodOptions.monthsByYear[dashYear] || []).map(m => (
                         <option key={m} value={m}>{m}</option>
@@ -2017,11 +2026,26 @@ const App = () => {
                 {dashMonth && (
                   <div className="filter-group">
                     <label>{t.selectWeek}</label>
-                    <select value={dashWeek} onChange={e => setDashWeek(e.target.value)}>
+                    <select
+                      value={dashWeek ? dashWeek.week_code : ''}
+                      onChange={e => {
+                        const code = e.target.value;
+                        if (!code) { setDashWeek(null); return; }
+                        const ww = workWeeks.find(w => w.week_code === code);
+                        setDashWeek(ww || null);
+                      }}
+                    >
                       <option value="">{t.allWeeks}</option>
-                      {(dashPeriodOptions.weeksByMonth[`${dashYear}-${dashMonth}`] || []).map(w => (
-                        <option key={w.week} value={w.week}>{w.label}</option>
-                      ))}
+                      {workWeeks.length > 0
+                        ? workWeeks
+                            .filter(w => w.work_month === `${dashYear}-${dashMonth}`)
+                            .map(w => (
+                              <option key={w.week_code} value={w.week_code}>{w.week_code}</option>
+                            ))
+                        : (dashPeriodOptions.weeksByMonth[`${dashYear}-${dashMonth}`] || []).map(w => (
+                            <option key={w.week} value={w.week}>{w.label}</option>
+                          ))
+                      }
                     </select>
                   </div>
                 )}

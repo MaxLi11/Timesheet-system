@@ -8,6 +8,24 @@ dayjs.extend(quarterOfYear);
 dayjs.extend(isoWeek);
 
 /**
+ * 根据 start_date 在工作周表中查找所属 week_code。
+ * 找不到时降级返回 ISO 周格式（兼容历史数据）。
+ */
+export const getWorkWeekCode = (dateStr, workWeeks) => {
+    const d = dayjs(dateStr);
+    if (!d.isValid()) return '';
+    if (workWeeks && workWeeks.length > 0) {
+        const found = workWeeks.find(w =>
+            !d.isBefore(dayjs(w.week_start), 'day') &&
+            !d.isAfter(dayjs(w.week_end), 'day')
+        );
+        if (found) return found.week_code;
+    }
+    // 降级：ISO 周（用于 2026 之前无工作周划分的历史数据）
+    return `${d.year()}-W${String(d.isoWeek()).padStart(2, '0')}`;
+};
+
+/**
  * Aggregates raw time entries based on a period (weekly, monthly, quarterly, yearly)
  */
 export const aggregateData = (entries, period = 'monthly') => {
@@ -68,7 +86,7 @@ export const prepareHeatmapData = (entries) => {
 /**
  * Aggregates data for multiple projects across a time period
  */
-export const aggregateProjectData = (data, periodType = 'monthly') => {
+export const aggregateProjectData = (data, periodType = 'monthly', workWeeks = []) => {
     const timeMap = {}; // { '2026-03': { 'ProjectA': 15.5, 'ProjectB': 8 } }
     const projects = new Set();
 
@@ -79,7 +97,7 @@ export const aggregateProjectData = (data, periodType = 'monthly') => {
         let timeKey = '';
 
         if (periodType === 'weekly') {
-            timeKey = `${d.year()}-W${String(d.isoWeek()).padStart(2, '0')}`;
+            timeKey = getWorkWeekCode(item.start_date, workWeeks);
         } else if (periodType === 'quarterly') {
             const q = Math.ceil((d.month() + 1) / 3);
             timeKey = `${d.year()}-Q${q}`;
@@ -402,7 +420,7 @@ export const getApprovalApprovers = (entries, filterYear, filterMonth, selectedP
  * Aggregates data for specific projects, grouped by time and then department.
  * Used for stacked bar charts.
  */
-export const aggregateProjectDeptData = (data, periodType) => {
+export const aggregateProjectDeptData = (data, periodType, workWeeks = []) => {
     const timeMap = {}; // { '2026-03': { 'DeptA': 10, 'DeptB': 5 } }
     const departments = new Set();
 
@@ -412,7 +430,7 @@ export const aggregateProjectDeptData = (data, periodType) => {
         const d = dayjs(item.start_date);
         let timeKey = '';
         if (periodType === 'weekly') {
-            timeKey = `${d.year()}-W${String(d.isoWeek()).padStart(2, '0')}`;
+            timeKey = getWorkWeekCode(item.start_date, workWeeks);
         } else if (periodType === 'quarterly') {
             timeKey = `${d.year()}-Q${Math.floor(d.month() / 3) + 1}`;
         } else {
