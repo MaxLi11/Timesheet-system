@@ -678,7 +678,8 @@ const App = () => {
   const [filterWeek, setFilterWeek] = useState('');
   const [completenessYear, setCompletenessYear] = useState('');
   const [completenessMonth, setCompletenessMonth] = useState('');
-  const [completenessWeek, setCompletenessWeek] = useState('');
+  const [completenessWeek, setCompletenessWeek] = useState(''); // week_code, e.g. "202613-W13"
+  const [workWeeks, setWorkWeeks] = useState([]); // [{week_code, week_start, week_end, work_month}]
   const [expandedDepts, setExpandedDepts] = useState(new Set());
   // Approval Rate state
   const [approvalData, setApprovalData] = useState([]);
@@ -977,6 +978,17 @@ const App = () => {
     }
   }, []);
 
+  const fetchWorkWeeks = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/work-weeks`);
+      if (!res.ok) return;
+      const json = await res.json();
+      setWorkWeeks(Array.isArray(json) ? json : []);
+    } catch (err) {
+      console.error('Failed to fetch work weeks:', err);
+    }
+  }, []);
+
   const fetchVanishedAfterUpload = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/vanished-after-upload`);
@@ -1034,12 +1046,13 @@ const App = () => {
     fetchVanishedAfterUpload();
     fetchApprovalData();
     fetchProjectScheduleData();
+    fetchWorkWeeks();
     const interval = setInterval(() => {
         checkConnection();
         // optionally refresh data periodically, but checking connection is enough
     }, 5000);
     return () => clearInterval(interval);
-  }, [fetchData, fetchReportingData, fetchActiveEmployees, fetchVanishedAfterUpload, fetchApprovalData, fetchProjectScheduleData]);
+  }, [fetchData, fetchReportingData, fetchActiveEmployees, fetchVanishedAfterUpload, fetchApprovalData, fetchProjectScheduleData, fetchWorkWeeks]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -1058,6 +1071,7 @@ const App = () => {
       fetchVanishedAfterUpload();
       fetchApprovalData();
       fetchProjectScheduleData();
+      fetchWorkWeeks();
     } catch (err) {
       alert(`${t.uploadFailed}: ${err.message}`);
     } finally {
@@ -1264,10 +1278,10 @@ const App = () => {
   }, [periodOptions.years, filterYear, completenessYear]);
 
   // Reset month/week when year changes
-  const handleYearChange = (y) => { setFilterYear(y); setFilterMonth(''); setFilterWeek(''); };
-  const handleMonthChange = (m) => { setFilterMonth(m); setFilterWeek(''); };
-  const handleCompletenessYearChange = (y) => { setCompletenessYear(y); setCompletenessMonth(''); setCompletenessWeek(''); };
-  const handleCompletenessMonthChange = (m) => { setCompletenessMonth(m); setCompletenessWeek(''); };
+  const handleYearChange = (y) => { setFilterYear(y); setFilterMonth(''); setFilterWeek(null); };
+  const handleMonthChange = (m) => { setFilterMonth(m); setFilterWeek(null); };
+  const handleCompletenessYearChange = (y) => { setCompletenessYear(y); setCompletenessMonth(''); setCompletenessWeek(null); };
+  const handleCompletenessMonthChange = (m) => { setCompletenessMonth(m); setCompletenessWeek(null); };
 
   const reportingRecords = useMemo(() =>
     dataHelper.computeReportingRate(reportingData, filterYear, filterMonth, filterWeek, Number(targetHours)),
@@ -1370,7 +1384,7 @@ const App = () => {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, t.reporting);
-    const periodLabel = filterWeek || filterMonth || filterYear || 'all';
+    const periodLabel = (filterWeek && filterWeek.week_code) || filterMonth || filterYear || 'all';
     XLSX.writeFile(wb, `完整填报率_${periodLabel}_target${targetHours}h.xlsx`);
   };
 
@@ -1521,7 +1535,7 @@ const App = () => {
       return [
         { label: t.targetHours, value: `${targetHours}h` },
         { label: uiText.deptGroups, value: reportingDeptCount },
-        { label: uiText.periodRange, value: filterWeek || filterMonth || filterYear || uiText.allPeriods }
+        { label: uiText.periodRange, value: (filterWeek && filterWeek.week_code) || filterMonth || filterYear || uiText.allPeriods }
       ];
     }
 
@@ -2272,11 +2286,26 @@ const App = () => {
                 {filterMonth && (
                   <div className="filter-group">
                     <label>{t.selectWeek}</label>
-                    <select value={filterWeek} onChange={e => setFilterWeek(e.target.value)}>
+                    <select
+                      value={filterWeek ? (filterWeek.week_code || '') : ''}
+                      onChange={e => {
+                        const code = e.target.value;
+                        if (!code) { setFilterWeek(''); return; }
+                        const ww = workWeeks.find(w => w.week_code === code);
+                        setFilterWeek(ww || '');
+                      }}
+                    >
                       <option value="">{t.allWeeks}</option>
-                      {(periodOptions.weeksByMonth[`${filterYear}-${filterMonth}`] || []).map(w => (
-                        <option key={w.week} value={w.week}>{w.label}</option>
-                      ))}
+                      {workWeeks.length > 0
+                        ? workWeeks
+                            .filter(w => w.work_month === `${filterYear}-${filterMonth}`)
+                            .map(w => (
+                              <option key={w.week_code} value={w.week_code}>{w.week_code}</option>
+                            ))
+                        : (periodOptions.weeksByMonth[`${filterYear}-${filterMonth}`] || []).map(w => (
+                            <option key={w.week} value={w.week}>{w.label}</option>
+                          ))
+                      }
                     </select>
                   </div>
                 )}
@@ -2366,7 +2395,7 @@ const App = () => {
                     const ws = XLSX.utils.json_to_sheet(rows);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, lang === 'zh' ? '漏填名单' : 'Missing');
-                    const periodLabel = completenessWeek || completenessMonth || completenessYear || 'all';
+                    const periodLabel = (completenessWeek && completenessWeek.week_code) || completenessMonth || completenessYear || 'all';
                     XLSX.writeFile(wb, `${lang === 'zh' ? '漏填名单' : 'missing_employees'}_${periodLabel}.xlsx`);
                   }}
                 >
@@ -2396,11 +2425,26 @@ const App = () => {
                 {completenessMonth && (
                   <div className="filter-group">
                     <label>{t.selectWeek}</label>
-                    <select value={completenessWeek} onChange={e => setCompletenessWeek(e.target.value)}>
+                    <select
+                      value={completenessWeek ? (completenessWeek.week_code || '') : ''}
+                      onChange={e => {
+                        const code = e.target.value;
+                        if (!code) { setCompletenessWeek(''); return; }
+                        const ww = workWeeks.find(w => w.week_code === code);
+                        setCompletenessWeek(ww || '');
+                      }}
+                    >
                       <option value="">{t.allWeeks}</option>
-                      {(periodOptions.weeksByMonth[`${completenessYear}-${completenessMonth}`] || []).map(w => (
-                        <option key={w.week} value={w.week}>{w.label}</option>
-                      ))}
+                      {workWeeks.length > 0
+                        ? workWeeks
+                            .filter(w => w.work_month === `${completenessYear}-${completenessMonth}`)
+                            .map(w => (
+                              <option key={w.week_code} value={w.week_code}>{w.week_code}</option>
+                            ))
+                        : (periodOptions.weeksByMonth[`${completenessYear}-${completenessMonth}`] || []).map(w => (
+                            <option key={w.week} value={w.week}>{w.label}</option>
+                          ))
+                      }
                     </select>
                   </div>
                 )}

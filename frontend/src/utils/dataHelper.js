@@ -165,6 +165,9 @@ export const getReportingPeriodOptions = (entries) => {
 /** 完整填报率汇总只按人员姓名，不使用工号 */
 const reportingEmployeeGroupKey = (entry) => (entry.employee_name || '').trim() || 'unknown';
 
+// filterWeek 可以是:
+//   - { week_start: 'YYYY-MM-DD', week_end: 'YYYY-MM-DD', week_code: '...' }（工作周表）
+//   - '' / null / undefined（未选）
 export const computeReportingRate = (entries, filterYear, filterMonth, filterWeek, targetHours) => {
     if (!filterYear) return [];
 
@@ -172,15 +175,14 @@ export const computeReportingRate = (entries, filterYear, filterMonth, filterWee
     let getPeriodKey, passesFilter;
 
     const getMonthNum = (d) => String(d.month() + 1).padStart(2, '0');
-    const getWeekNum = (d) => String(d.isoWeek()).padStart(2, '0');
 
-    if (filterWeek) {
-        // Week-level
-        getPeriodKey = (d) => `${d.year()}-W${getWeekNum(d)}`;
-        passesFilter = (d) => 
-            String(d.year()) === filterYear && 
-            getMonthNum(d) === filterMonth && 
-            getWeekNum(d) === filterWeek;
+    if (filterWeek && filterWeek.week_start) {
+        // Week-level: 用工作周的日期范围判断
+        const ws = dayjs(filterWeek.week_start);
+        const we = dayjs(filterWeek.week_end);
+        const weekLabel = filterWeek.week_code || filterWeek.week_start;
+        getPeriodKey = () => weekLabel;
+        passesFilter = (d) => !d.isBefore(ws, 'day') && !d.isAfter(we, 'day');
     } else if (filterMonth) {
         // Month-level
         getPeriodKey = (d) => d.format('YYYY-MM');
@@ -234,7 +236,8 @@ export const computeReportingCompleteness = (
     const no_filter_result = { missing_by_dept: {}, missing_employees: [], missing_count: 0, no_filter: true };
     if (!Array.isArray(entries) || entries.length === 0) return empty;
     // 没有选任何时间范围时不计算（无意义）
-    if (!filterYear && !filterMonth && !filterWeek) return no_filter_result;
+    const hasAnyFilter = filterYear || filterMonth || (filterWeek && filterWeek.week_start);
+    if (!hasAnyFilter) return no_filter_result;
 
     // 基数：历史上所有曾经填过工时的人（固定，不受筛选条件影响）
     // entries 后端已排除"未提交"状态，因此这里的人 = 历史有效填报人员
@@ -253,18 +256,26 @@ export const computeReportingCompleteness = (
     // 按筛选范围过滤，找出该范围内有填报记录的人
     // filterYear  格式: '2026'
     // filterMonth 格式: '03'（两位月份数字）
-    // filterWeek  格式: '13'（两位ISO周号）
+    // filterWeek  格式: { week_start, week_end, week_code }（工作周对象）或空
+    const hasWeekRange = filterWeek && filterWeek.week_start;
+    const weekStart = hasWeekRange ? dayjs(filterWeek.week_start) : null;
+    const weekEnd   = hasWeekRange ? dayjs(filterWeek.week_end)   : null;
+
     const submittedSet = new Set();
     entries.forEach(entry => {
         const employeeName = (entry.employee_name || '').trim();
         if (!employeeName) return;
 
-        if (filterYear || filterMonth || filterWeek) {
+        if (filterYear || filterMonth || hasWeekRange) {
             const d = dayjs(entry.start_date);
             if (!d.isValid()) return;
-            if (filterYear && d.year().toString() !== filterYear) return;
-            if (filterMonth && (d.month() + 1).toString().padStart(2, '0') !== filterMonth) return;
-            if (filterWeek && d.isoWeek().toString().padStart(2, '0') !== filterWeek) return;
+            if (hasWeekRange) {
+                // 用工作周日期范围判断，忽略 filterYear/filterMonth（周范围已隐含）
+                if (d.isBefore(weekStart, 'day') || d.isAfter(weekEnd, 'day')) return;
+            } else {
+                if (filterYear && d.year().toString() !== filterYear) return;
+                if (filterMonth && (d.month() + 1).toString().padStart(2, '0') !== filterMonth) return;
+            }
         }
 
         submittedSet.add(employeeName);

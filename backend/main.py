@@ -26,6 +26,9 @@ def ping():
 def health():
     return {"status": "healthy"}
 
+# Preset work-week file bundled with the backend
+_PRESET_WORK_WEEK_PATH = os.path.join(os.path.dirname(__file__), "data", "work_weeks_preset.xlsx")
+
 # Initialize database
 @app.on_event("startup")
 async def startup_event():
@@ -35,6 +38,26 @@ async def startup_event():
         print("Database initialized successfully.")
     except Exception as e:
         print(f"Database initialization failed: {e}")
+
+    # Auto-seed work_weeks from preset file if the table is empty
+    db = database.SessionLocal()
+    try:
+        count = db.query(database.WorkWeek).count()
+        if count == 0 and os.path.exists(_PRESET_WORK_WEEK_PATH):
+            print("work_weeks table is empty – seeding from preset file...")
+            try:
+                weeks = parser.parse_work_week(_PRESET_WORK_WEEK_PATH)
+                if weeks:
+                    crud.save_work_weeks(db, weeks)
+                    print(f"Seeded {len(weeks)} work weeks from preset.")
+                else:
+                    print("Preset file parsed but returned no rows.")
+            except Exception as e:
+                print(f"Failed to seed work weeks: {e}")
+        elif count > 0:
+            print(f"work_weeks already has {count} rows, skipping preset seed.")
+    finally:
+        db.close()
 
 # Dependency for DB session
 def get_db():
@@ -218,6 +241,23 @@ async def upload_work_week(file: UploadFile = File(...), db: Session = Depends(g
                 os.remove(temp_path)
             except Exception as e:
                 print(f"Error removing temporary file {temp_path}: {e}")
+
+
+@app.get("/work-weeks")
+def get_work_weeks(db: Session = Depends(get_db)):
+    """
+    返回全部工作周划分数据，供前端周筛选器使用。
+    """
+    rows = db.query(database.WorkWeek).order_by(database.WorkWeek.week_start).all()
+    return [
+        {
+            "week_code": r.week_code,
+            "week_start": str(r.week_start),
+            "week_end": str(r.week_end),
+            "work_month": r.work_month,
+        }
+        for r in rows
+    ]
 
 
 @app.get("/person-month-ratio")
