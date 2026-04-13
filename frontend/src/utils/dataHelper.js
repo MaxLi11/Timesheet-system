@@ -230,21 +230,18 @@ export const computeReportingCompleteness = (
     filterMonth,
     filterWeek
 ) => {
-    const empty = { missing_by_dept: {}, missing_employees: [], missing_count: 0 };
+    const empty = { missing_by_dept: {}, missing_employees: [], missing_count: 0, no_filter: false };
+    const no_filter_result = { missing_by_dept: {}, missing_employees: [], missing_count: 0, no_filter: true };
     if (!Array.isArray(entries) || entries.length === 0) return empty;
+    // 没有选任何时间范围时不计算（无意义）
+    if (!filterYear && !filterMonth && !filterWeek) return no_filter_result;
 
-    // 基数：在选定年份内出现过的员工
-    // 如果没选年，则取全量历史出现过的员工（兜底）
-    // 这样避免把历史离职人员算成当年漏填
-    const empDeptMap = {};  // name -> dept
+    // 基数：历史上所有曾经填过工时的人（固定，不受筛选条件影响）
+    // entries 后端已排除"未提交"状态，因此这里的人 = 历史有效填报人员
+    const empDeptMap = {};  // name -> dept（取最新出现的部门）
     entries.forEach(entry => {
         const name = (entry.employee_name || '').trim();
         if (!name) return;
-        // 基数范围：与filterYear对齐，只统计当年出现过的人
-        if (filterYear) {
-            const d = dayjs(entry.start_date);
-            if (!d.isValid() || d.year().toString() !== filterYear) return;
-        }
         if (!empDeptMap[name]) {
             empDeptMap[name] = (entry.department || '').trim() || 'Unknown';
         }

@@ -2406,7 +2406,9 @@ const App = () => {
                 )}
               </div>
 
-              {(reportingCompleteness.missing_count ?? 0) === 0 ? (
+              {reportingCompleteness.no_filter ? (
+                <div className="card no-issues table-card">{lang === 'zh' ? '请先选择年份和月份/周次，查看对应漏填人员' : 'Please select a year and month/week to view missing submissions'}</div>
+              ) : (reportingCompleteness.missing_count ?? 0) === 0 ? (
                 <div className="card no-issues table-card">{t.completenessNoMissing}</div>
               ) : (
                 Object.entries(reportingCompleteness.missing_by_dept || {}).sort(([a], [b]) => a.localeCompare(b)).map(([dept, names]) => (
