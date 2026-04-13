@@ -233,13 +233,19 @@ export const computeReportingCompleteness = (
     const empty = { missing_by_dept: {}, missing_employees: [], missing_count: 0 };
     if (!Array.isArray(entries) || entries.length === 0) return empty;
 
-    // 基数：从全量 entries（/reporting-rate 全部记录）中取所有出现过的员工
-    // entries 后端已排除离职人员（_active_entry_filter）和"未提交"状态
-    // 因此历史上在 entries 中出现过的人 = 历史在职且填报过的人
+    // 基数：在选定年份内出现过的员工
+    // 如果没选年，则取全量历史出现过的员工（兜底）
+    // 这样避免把历史离职人员算成当年漏填
     const empDeptMap = {};  // name -> dept
     entries.forEach(entry => {
         const name = (entry.employee_name || '').trim();
-        if (name && !empDeptMap[name]) {
+        if (!name) return;
+        // 基数范围：与filterYear对齐，只统计当年出现过的人
+        if (filterYear) {
+            const d = dayjs(entry.start_date);
+            if (!d.isValid() || d.year().toString() !== filterYear) return;
+        }
+        if (!empDeptMap[name]) {
             empDeptMap[name] = (entry.department || '').trim() || 'Unknown';
         }
     });
