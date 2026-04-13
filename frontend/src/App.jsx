@@ -675,10 +675,10 @@ const App = () => {
   const [targetHours, setTargetHours] = useState(40);
   const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
-  const [filterWeek, setFilterWeek] = useState('');
+  const [filterWeek, setFilterWeek] = useState(null); // null or {week_code, week_start, week_end, work_month}
   const [completenessYear, setCompletenessYear] = useState('');
   const [completenessMonth, setCompletenessMonth] = useState('');
-  const [completenessWeek, setCompletenessWeek] = useState(''); // week_code, e.g. "202613-W13"
+  const [completenessWeek, setCompletenessWeek] = useState(null); // null or {week_code, week_start, week_end, work_month}
   const [workWeeks, setWorkWeeks] = useState([]); // [{week_code, week_start, week_end, work_month}]
   const [expandedDepts, setExpandedDepts] = useState(new Set());
   // Approval Rate state
@@ -2290,9 +2290,9 @@ const App = () => {
                       value={filterWeek ? (filterWeek.week_code || '') : ''}
                       onChange={e => {
                         const code = e.target.value;
-                        if (!code) { setFilterWeek(''); return; }
+                        if (!code) { setFilterWeek(null); return; }
                         const ww = workWeeks.find(w => w.week_code === code);
-                        setFilterWeek(ww || '');
+                        setFilterWeek(ww || null);
                       }}
                     >
                       <option value="">{t.allWeeks}</option>
@@ -2429,9 +2429,9 @@ const App = () => {
                       value={completenessWeek ? (completenessWeek.week_code || '') : ''}
                       onChange={e => {
                         const code = e.target.value;
-                        if (!code) { setCompletenessWeek(''); return; }
+                        if (!code) { setCompletenessWeek(null); return; }
                         const ww = workWeeks.find(w => w.week_code === code);
-                        setCompletenessWeek(ww || '');
+                        setCompletenessWeek(ww || null);
                       }}
                     >
                       <option value="">{t.allWeeks}</option>
