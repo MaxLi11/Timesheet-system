@@ -103,6 +103,15 @@ async def upload_timesheet(file: UploadFile = File(...), db: Session = Depends(g
             previous_employee_names, entries, active_names
         )
         crud.save_vanished_after_upload(db, vanished)
+
+        # 审核：工时记录中出现、但不在员工基础信息里的游离人员
+        if employee_profiles:
+            profile_names = {(p.get("employee_name") or "").strip() for p in employee_profiles}
+            entry_names = {(e.get("employee_name") or "").strip() for e in entries if e.get("employee_name")}
+            ghost_names = sorted(entry_names - profile_names)
+            if ghost_names:
+                print(f"[员工基础信息审核] 工时记录中存在、但不在员工基础信息里的人员（{len(ghost_names)}人）: {ghost_names}")
+
         return {
             "message": "Upload successful",
             "rows_processed": count,

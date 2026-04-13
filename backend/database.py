@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import Column, Date, Float, ForeignKey, Integer, String, create_engine, inspect, text, UniqueConstraint
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, create_engine, inspect, text, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
@@ -27,9 +27,11 @@ class Employee(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     employee_id = Column(String, unique=True, index=True)
-    department = Column(String)
+    department = Column(String)       # 部门全称
+    department_abbr = Column(String)  # 部门简称，如 AE / Digital / Analog
     company = Column(String)
     position = Column(String)
+    status = Column(String)
 
 
 class TimeEntry(Base):
@@ -38,6 +40,7 @@ class TimeEntry(Base):
     id = Column(Integer, primary_key=True, index=True)
     employee_name = Column(String, index=True)
     employee_id = Column(String, index=True)
+    employee_status = Column(String, index=True)
     department = Column(String, index=True)
     department_full = Column(String)
     position = Column(String)
@@ -98,9 +101,20 @@ class WorkWeek(Base):
     __table_args__ = (UniqueConstraint("week_start", name="uq_work_weeks_week_start"),)
 
 
+class AppState(Base):
+    """Single-row style key/value for small persisted UI state."""
+
+    __tablename__ = "app_state"
+
+    key = Column(String(64), primary_key=True)
+    value_json = Column(String, nullable=False, default="{}")
+    updated_at = Column(DateTime, nullable=True)
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     _backfill_time_entry_columns()
+    _backfill_employee_columns()
 
 
 def _backfill_time_entry_columns():
@@ -112,6 +126,7 @@ def _backfill_time_entry_columns():
     required_columns = {
         "department_full": "VARCHAR",
         "position": "VARCHAR",
+        "employee_status": "VARCHAR",
     }
 
     with engine.begin() as connection:
@@ -120,4 +135,24 @@ def _backfill_time_entry_columns():
                 continue
             connection.execute(
                 text(f"ALTER TABLE time_entries ADD COLUMN {column_name} {column_type}")
+            )
+
+
+def _backfill_employee_columns():
+    inspector = inspect(engine)
+    if "employees" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("employees")}
+    required_columns = {
+        "status": "VARCHAR",
+        "department_abbr": "VARCHAR",
+    }
+
+    with engine.begin() as connection:
+        for column_name, column_type in required_columns.items():
+            if column_name in existing_columns:
+                continue
+            connection.execute(
+                text(f"ALTER TABLE employees ADD COLUMN {column_name} {column_type}")
             )

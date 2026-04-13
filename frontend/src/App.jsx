@@ -2405,7 +2405,19 @@ const App = () => {
             <div style={{ marginBottom: '0.9rem' }}>
               <div className="card-heading-row" style={{ marginBottom: '0.5rem' }}>
                 <div>
-                  <h3 style={{ margin: 0 }}>{t.completenessTitle}</h3>
+                  <h3 style={{ margin: 0 }}>
+                    {t.completenessTitle}
+                    {!reportingCompleteness.no_filter && (reportingCompleteness.total_count ?? 0) > 0 && (
+                      <span style={{ marginLeft: '0.75rem', fontSize: '0.85rem', fontWeight: 'normal', color: 'var(--color-accent, #4f8ef7)' }}>
+                        {lang === 'zh' ? '完整填报率' : 'Reporting Rate'}：
+                        <strong>{reportingCompleteness.submitted_count ?? 0}</strong>
+                        {' / '}
+                        <strong>{reportingCompleteness.total_count}</strong>
+                        {' '}
+                        ({Math.round(((reportingCompleteness.submitted_count ?? 0) / reportingCompleteness.total_count) * 100)}%)
+                      </span>
+                    )}
+                  </h3>
                   <p className="module-caption" style={{ marginTop: '6px' }}>{t.completenessMethodBDesc}</p>
                 </div>
                 <button

@@ -326,35 +326,34 @@ def _extract_project_alias_mapping(workbook):
 
 
 def _extract_employee_profiles(workbook):
-    candidate_sheets = []
+    """
+    解析员工基础信息 sheet。
+    按列名匹配，适配「员工基础信息」sheet 的实际结构：
+      工号 | 姓名 | 部门 | 分部 | 直接上级 | 岗位 | 姓名简称 | 部门简称 | Team leader | BU
+    """
     for _, df in workbook.items():
         if not isinstance(df, pd.DataFrame):
             continue
-        if df.shape[0] < 50 or df.shape[1] < 7:
+        cols = [str(c).strip() for c in df.columns]
+        # 必须同时含有"姓名"和"部门简称"列才认定为员工基础信息 sheet
+        if '姓名' not in cols or '部门简称' not in cols:
             continue
-        if _is_timesheet_frame(df):
-            continue
-        candidate_sheets.append(df)
-
-    if not candidate_sheets:
-        return []
-
-    sheet = max(candidate_sheets, key=lambda frame: frame.shape[0])
-    profiles = []
-    for _, row in sheet.iterrows():
-        employee_name = _clean_text(row.iloc[2] if len(row) > 2 else "")
-        if not employee_name:
-            continue
-        profiles.append(
-            {
-                "employee_name": employee_name,
-                "department_full": _clean_text(row.iloc[3] if len(row) > 3 else ""),
-                "position": _clean_text(row.iloc[6] if len(row) > 6 else ""),
-                "employee_id": _clean_text(row.iloc[7] if len(row) > 7 else ""),
-                "employee_status": _clean_text(row.iloc[0] if len(row) > 0 else ""),
-            }
-        )
-    return profiles
+        profiles = []
+        for _, row in df.iterrows():
+            employee_name = _clean_text(row.get('姓名', ''))
+            if not employee_name:
+                continue
+            profiles.append({
+                "employee_name":   employee_name,
+                "employee_id":     _clean_text(row.get('工号', '')),
+                "department_full": _clean_text(row.get('部门', '')),
+                "position":        _clean_text(row.get('岗位', '')),
+                "department":      _clean_text(row.get('部门简称', '')),
+                "employee_status": "",  # 新表所有人均为在职，无离职标记列
+            })
+        if profiles:
+            return profiles
+    return []
 
 
 def _extract_department_mapping(workbook):

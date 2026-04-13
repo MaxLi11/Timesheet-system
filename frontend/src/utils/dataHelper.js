@@ -257,16 +257,27 @@ export const computeReportingCompleteness = (
     const hasAnyFilter = filterYear || filterMonth || (filterWeek && filterWeek.week_start);
     if (!hasAnyFilter) return no_filter_result;
 
-    // 基数：历史上所有曾经填过工时的人（固定，不受筛选条件影响）
-    // entries 后端已排除"未提交"状态，因此这里的人 = 历史有效填报人员
-    const empDeptMap = {};  // name -> dept（取最新出现的部门）
-    entries.forEach(entry => {
-        const name = (entry.employee_name || '').trim();
-        if (!name) return;
-        if (!empDeptMap[name]) {
-            empDeptMap[name] = (entry.department || '').trim() || 'Unknown';
-        }
-    });
+    // 基数：来自 /active-employees 的 Excel 员工基础信息（权威名单）
+    // 格式: [{employee_name, department(简称), department_full, ...}]
+    // 降级：若 activeEmployees 为空（employees 表未初始化），从 entries 历史推断
+    const empDeptMap = {};  // name -> dept 简称
+    if (Array.isArray(activeEmployees) && activeEmployees.length > 0) {
+        activeEmployees.forEach(emp => {
+            const name = (emp.employee_name || '').trim();
+            // department 是简称（AE/Digital/...），department_full 是全称
+            const dept = (emp.department || emp.department_full || '').trim() || 'Unknown';
+            if (name) empDeptMap[name] = dept;
+        });
+    } else {
+        // 降级：从 entries 历史推断（兼容 employees 表为空的旧状态）
+        entries.forEach(entry => {
+            const name = (entry.employee_name || '').trim();
+            if (!name) return;
+            if (!empDeptMap[name]) {
+                empDeptMap[name] = (entry.department || '').trim() || 'Unknown';
+            }
+        });
+    }
 
     const baselineNames = Object.keys(empDeptMap); // 历史所有填过的在职员工
     if (baselineNames.length === 0) return empty;
@@ -314,10 +325,15 @@ export const computeReportingCompleteness = (
     missingEmployees.sort();
     Object.values(missingByDept).forEach(arr => arr.sort());
 
+    const totalCount = baselineNames.length;
+    const submittedCount = totalCount - missingEmployees.length;
+
     return {
         missing_by_dept: missingByDept,
         missing_employees: missingEmployees,
-        missing_count: missingEmployees.length
+        missing_count: missingEmployees.length,
+        total_count: totalCount,       // 应填人数（基数）
+        submitted_count: submittedCount // 已填人数
     };
 };
 

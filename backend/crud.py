@@ -140,6 +140,16 @@ def save_employee_profiles(db: Session, profiles: list):
         db.commit()
         return 0
 
+    # 审核：检测姓名重复（工号不同但姓名相同）
+    name_count = {}
+    for p in profiles:
+        n = (p.get("employee_name") or "").strip()
+        if n:
+            name_count[n] = name_count.get(n, 0) + 1
+    duplicates = [n for n, c in name_count.items() if c > 1]
+    if duplicates:
+        print(f"[员工基础信息审核] 姓名重复（{len(duplicates)}人）: {duplicates}")
+
     dedup = {}
     for profile in profiles:
         employee_name = (profile.get("employee_name") or "").strip()
@@ -149,6 +159,7 @@ def save_employee_profiles(db: Session, profiles: list):
             "name": employee_name,
             "employee_id": (profile.get("employee_id") or "").strip() or None,
             "department": (profile.get("department_full") or "").strip(),
+            "department_abbr": (profile.get("department") or "").strip(),
             "position": (profile.get("position") or "").strip(),
             "status": (profile.get("employee_status") or "").strip(),
         }
@@ -172,6 +183,7 @@ def get_active_employees(db: Session):
             "employee_name": row.name or "",
             "employee_id": row.employee_id or "",
             "department_full": row.department or "",
+            "department": row.department_abbr or "",  # 部门简称，供漏填检查基数使用
             "position": row.position or "",
             "status": row.status or "",
         }
