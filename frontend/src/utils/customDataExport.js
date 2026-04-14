@@ -1,3 +1,18 @@
+import dayjs from "dayjs";
+
+const resolveWorkMonthKey = (dateStr, workWeeks = []) => {
+  const d = dayjs(dateStr);
+  if (!d.isValid()) return "";
+  if (workWeeks && workWeeks.length > 0) {
+    const found = workWeeks.find(
+      (w) =>
+        !d.isBefore(dayjs(w.week_start), "day") &&
+        !d.isAfter(dayjs(w.week_end), "day")
+    );
+    if (found && found.work_month) return String(found.work_month).trim();
+  }
+  return d.format("YYYY-MM");
+};
 const BASE_HEADERS = ["项目", "员工", "所属部门", "部门简称", "职位"];
 const SHEET_NAME = "每项目工时";
 
@@ -59,15 +74,15 @@ export const buildCustomProjectHoursFilename = (now = new Date()) => {
   ].join("");
 };
 
-export const buildCustomProjectHoursExport = (entries = [], now = new Date()) => {
+export const buildCustomProjectHoursExport = (entries = [], workWeeks = [], now = new Date()) => {
   const filteredEntries = entries.filter((entry) => {
     if (!entry || entry.category !== "Project") return false;
     if (entry.current_node && String(entry.current_node).trim().toLowerCase() !== "close") return false;
-    return Boolean(entry.project_name && entry.employee_name && formatMonthKey(entry.start_date));
+    return Boolean(entry.project_name && entry.employee_name && resolveWorkMonthKey(entry.start_date, workWeeks));
   });
 
   const monthKeys = filteredEntries
-    .map((entry) => formatMonthKey(entry.start_date))
+    .map((entry) => resolveWorkMonthKey(entry.start_date, workWeeks))
     .filter(Boolean)
     .sort(compareText);
   // Only include months that actually have data (no gap-filling with zeros)
@@ -76,7 +91,7 @@ export const buildCustomProjectHoursExport = (entries = [], now = new Date()) =>
   const groups = new Map();
   filteredEntries.forEach((entry) => {
     const groupKey = buildGroupKey(entry);
-    const monthKey = formatMonthKey(entry.start_date);
+    const monthKey = resolveWorkMonthKey(entry.start_date, workWeeks);
     const existingGroup = groups.get(groupKey) || {
       project_name: String(entry.project_name || "").trim(),
       employee_name: String(entry.employee_name || "").trim(),

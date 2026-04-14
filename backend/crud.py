@@ -424,63 +424,70 @@ def save_work_weeks(db: Session, weeks: list):
     return {"weeks_processed": len(weeks)}
 
 
-def _build_week_to_month_map(db: Session) -> dict:
-    """返回 {week_start_date: 'YYYY-MM'} 的字典，用于快速查月份"""
-    rows = db.query(database.WorkWeek).all()
-    return {row.week_start: row.work_month for row in rows}
-
-
-# ── 人月占比计算 ────────────────────────────────────────────
+# ── 人月占比 / 行军图 / 每人每月总工时（共用口径）────────────────
 
 _NON_PROJECT_INCLUDE = {"management", "others", "training"}
+
+
+def _resolve_entry_work_month(start_date, work_week_rows: list) -> str:
+    """
+    按工作周划分表归属 work_month：start_date 落在某周的 [week_start, week_end] 内则取该周 work_month；
+    否则用 start_date 自然月。与前端仪表盘按周区间匹配一致。
+    """
+    if not start_date:
+        return ""
+    for w in work_week_rows:
+        if w.week_start <= start_date <= w.week_end:
+            return w.work_month or ""
+    return start_date.strftime("%Y-%m")
+
+
+def _entry_counts_toward_monthly_total(e) -> bool:
+    """Close 口径下行是否计入「员工当月总工时」分母（项目 + 非项目 M/O/T）。"""
+    if e.category == "Project":
+        return True
+    if e.category == "Non-Project":
+        proj = str(e.project_name or "").strip().lower()
+        return proj in _NON_PROJECT_INCLUDE
+    return False
+
+
+def _custom_export_base_entries(db: Session):
+    """定制化导出共用：Close + 在职。"""
+    return (
+        db.query(database.TimeEntry)
+        .filter(func.lower(database.TimeEntry.current_node) == "close")
+        .filter(_active_entry_filter())
+        .all()
+    )
 
 
 def get_person_month_ratio(db: Session):
     """
     计算每个项目每位员工每月的工时占比。
-    只统计 current_node == Close 的记录。
-    月份归属：优先查工作周划分表，查不到则用开始日期自然月。
+    Close + 在职；分母 = 项目类 + 非项目 Management/Others/Training。
+    月份：工作周表区间内归属 work_month，否则自然月。
     """
-    week_map = _build_week_to_month_map(db)
+    work_week_rows = db.query(database.WorkWeek).all()
+    entries = _custom_export_base_entries(db)
 
-    entries = db.query(database.TimeEntry).filter(
-        func.lower(database.TimeEntry.current_node) == "close"
-    ).filter(_active_entry_filter()).all()
-
-    def resolve_month(start_date) -> str:
-        if start_date and start_date in week_map:
-            return week_map[start_date]
-        if start_date:
-            return start_date.strftime("%Y-%m")
-        return ""
-
-    # 第一步：统计每位员工每月的总工时
-    # key: (employee_name, month)  value: total_hours
     employee_month_total: dict = {}
-
     for e in entries:
-        month = resolve_month(e.start_date)
+        if not _entry_counts_toward_monthly_total(e):
+            continue
+        month = _resolve_entry_work_month(e.start_date, work_week_rows)
         if not month:
             continue
         key = (e.employee_name, month)
-        hours = float(e.hours or 0)
+        employee_month_total[key] = employee_month_total.get(key, 0) + float(e.hours or 0)
 
-        if e.category == "Project":
-            employee_month_total[key] = employee_month_total.get(key, 0) + hours
-        elif e.category == "Non-Project":
-            proj = str(e.project_name or "").strip().lower()
-            if proj in _NON_PROJECT_INCLUDE:
-                employee_month_total[key] = employee_month_total.get(key, 0) + hours
-
-    # 第二步：统计每个项目每位员工每月的工时
-    # key: (project_name, employee_name, month)  value: hours
     project_employee_month: dict = {}
-    employee_meta: dict = {}  # employee_name -> {department_full, department, position}
+    employee_meta: dict = {}
 
     for e in entries:
         if e.category != "Project":
             continue
-        month = resolve_month(e.start_date)
+        month = _resolve_entry_work_month(e.start_date, work_week_rows)
         if not month:
             continue
         key = (e.project_name, e.employee_name, month)
@@ -501,9 +508,7 @@ def get_person_month_ratio(db: Session):
             if not meta["position"] and e.position:
                 meta["position"] = e.position
 
-    # 第三步：计算占比，组装结果
-    # 按 project_name, employee_name 分组，月份作为动态列
-    result_map: dict = {}  # (project, employee) -> row dict
+    result_map: dict = {}
 
     for (project, employee, month), proj_hours in project_employee_month.items():
         total = employee_month_total.get((employee, month), 0)
@@ -522,8 +527,9 @@ def get_person_month_ratio(db: Session):
             }
         result_map[row_key]["months"][month] = ratio
 
-    # 收集所有月份并排序
-    all_months = sorted({m for (_, _, m) in project_employee_month.keys()})
+    month_from_projects = {m for (_, _, m) in project_employee_month.keys()}
+    month_from_totals = {m for (_, m) in employee_month_total.keys()}
+    all_months = sorted(month_from_projects | month_from_totals)
 
     rows = sorted(result_map.values(), key=lambda r: (r["project_name"], r["employee_name"]))
 
@@ -532,30 +538,31 @@ def get_person_month_ratio(db: Session):
 
 def get_person_month_march(db: Session):
     """
-    人月行军图：每个项目每位员工每月的工时、人月占比、当月总工时。
-    只统计 current_node='Close' + category='Project'。
+    人月行军图：每项目每员工每月项目工时、占比、当月总工时。
+    Close + 在职；当月总工时 = 项目 + 非项目 M/O/T；项目格仅 Project。
+    月份归属同 get_person_month_ratio。
     """
-    entries = db.query(database.TimeEntry).filter(
-        func.lower(database.TimeEntry.current_node) == "close",
-        database.TimeEntry.category == "Project"
-    ).all()
+    work_week_rows = db.query(database.WorkWeek).all()
+    entries = _custom_export_base_entries(db)
 
-    # 员工每月总工时
     emp_month_total: dict = {}
     for e in entries:
-        if not e.start_date:
+        if not _entry_counts_toward_monthly_total(e):
             continue
-        month = e.start_date.strftime("%Y-%m")
+        month = _resolve_entry_work_month(e.start_date, work_week_rows)
+        if not month:
+            continue
         key = (e.employee_name, month)
         emp_month_total[key] = emp_month_total.get(key, 0) + float(e.hours or 0)
 
-    # 项目×员工每月工时
     proj_emp_month: dict = {}
     emp_meta: dict = {}
     for e in entries:
-        if not e.start_date:
+        if e.category != "Project":
             continue
-        month = e.start_date.strftime("%Y-%m")
+        month = _resolve_entry_work_month(e.start_date, work_week_rows)
+        if not month:
+            continue
         key = (e.project_name, e.employee_name, month)
         proj_emp_month[key] = proj_emp_month.get(key, 0) + float(e.hours or 0)
         if e.employee_name not in emp_meta:
@@ -565,9 +572,10 @@ def get_person_month_march(db: Session):
                 "position": e.position or "",
             }
 
-    all_months = sorted({m for (_, _, m) in proj_emp_month})
+    month_from_projects = {m for (_, _, m) in proj_emp_month.keys()}
+    month_from_totals = {m for (_, m) in emp_month_total.keys()}
+    all_months = sorted(month_from_projects | month_from_totals)
 
-    # 组装行数据
     row_map: dict = {}
     for (proj, emp, month), proj_hours in proj_emp_month.items():
         total = emp_month_total.get((emp, month), 0)
@@ -581,17 +589,16 @@ def get_person_month_march(db: Session):
                 "department_full": meta.get("department_full", ""),
                 "department": meta.get("department", ""),
                 "position": meta.get("position", ""),
-                "months": {}
+                "months": {},
             }
         row_map[key]["months"][month] = {
             "proj_hours": round(proj_hours, 2),
             "ratio": ratio,
-            "total_hours": round(total, 2)
+            "total_hours": round(total, 2),
         }
 
     rows = sorted(row_map.values(), key=lambda r: (r["project_name"], r["employee_name"]))
 
-    # 汇总行：每月所有员工的合计
     summary: dict = {}
     for month in all_months:
         s_proj = sum(v["months"].get(month, {}).get("proj_hours", 0) for v in rows)
@@ -600,7 +607,7 @@ def get_person_month_march(db: Session):
         summary[month] = {
             "proj_hours": round(s_proj, 3),
             "ratio": round(s_ratio, 3),
-            "total_hours": round(s_total, 3)
+            "total_hours": round(s_total, 3),
         }
 
     return {"months": all_months, "rows": rows, "summary": summary}
@@ -608,19 +615,19 @@ def get_person_month_march(db: Session):
 
 def get_employee_monthly_total(db: Session):
     """
-    每人每月总工时：每位员工每月所有项目工时总和。
-    只统计 current_node='Close' + category='Project'。
+    每人每月总工时：Close + 在职；统计项目 + 非项目 Management/Others/Training。
+    月份归属同 get_person_month_ratio。
     """
-    entries = db.query(database.TimeEntry).filter(
-        func.lower(database.TimeEntry.current_node) == "close",
-        database.TimeEntry.category == "Project"
-    ).all()
+    work_week_rows = db.query(database.WorkWeek).all()
+    entries = _custom_export_base_entries(db)
 
     emp_month: dict = {}
     for e in entries:
-        if not e.start_date:
+        if not _entry_counts_toward_monthly_total(e):
             continue
-        month = e.start_date.strftime("%Y-%m")
+        month = _resolve_entry_work_month(e.start_date, work_week_rows)
+        if not month:
+            continue
         key = (e.employee_name, month)
         emp_month[key] = emp_month.get(key, 0) + float(e.hours or 0)
 

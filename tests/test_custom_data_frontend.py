@@ -24,7 +24,7 @@ class CustomDataFrontendTests(unittest.TestCase):
             (
                 f"import {{ buildCustomProjectHoursExport }} from '{helper_url}';"
                 "const entries = JSON.parse(process.env.CUSTOM_EXPORT_INPUT);"
-                "const result = buildCustomProjectHoursExport(entries, new Date('2026-03-18T09:15:00Z'));"
+                "const result = buildCustomProjectHoursExport(entries, [], new Date('2026-03-18T09:15:00Z'));"
                 "console.log(JSON.stringify(result));"
             ),
         ]
@@ -49,7 +49,7 @@ class CustomDataFrontendTests(unittest.TestCase):
         self.assertIn("{ id: 'custom_data'", self.app)
         self.assertIn("activeTab === 'custom_data'", self.app)
         self.assertIn("const exportCustomProjectHoursExcel = () => {", self.app)
-        self.assertIn("buildCustomProjectHoursExport(data)", self.app)
+        self.assertIn("buildCustomProjectHoursExport(data, workWeeks)", self.app)
         self.assertIn("XLSX.utils.aoa_to_sheet", self.app)
 
     def test_custom_export_helper_builds_continuous_month_matrix(self):
@@ -128,9 +128,9 @@ class CustomDataFrontendTests(unittest.TestCase):
             result["headers"],
             ["项目", "员工", "所属部门", "部门简称", "职位", "2025-01", "2025-02", "2025-03", "总计"],
         )
-        self.assertEqual(result["rows"][0], ["Alpha", "Bob", "Full Digital", "Digital", "Designer", 2, 0, 4, 6])
-        self.assertEqual(result["rows"][1], ["Alpha", "Zed", "Full AE", "AE", "Engineer", 5, 0, 0, 5])
-        self.assertEqual(result["rows"][2], ["Beta", "Amy", "Full Test", "Test", "Lead", 0, 6, 3, 9])
+        self.assertEqual(result["rows"][0], ["Alpha", "Bob", "Full Digital", "Digital", "Designer", 2, None, 4, 6])
+        self.assertEqual(result["rows"][1], ["Alpha", "Zed", "Full AE", "AE", "Engineer", 5, None, None, 5])
+        self.assertEqual(result["rows"][2], ["Beta", "Amy", "Full Test", "Test", "Lead", None, 6, 3, 9])
         self.assertEqual(result["sheetName"], "每项目工时")
         self.assertEqual(result["filename"], "每项目工时_Close口径_20260318_0915.xlsx")
 

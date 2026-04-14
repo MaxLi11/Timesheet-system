@@ -1389,7 +1389,7 @@ const App = () => {
   };
 
   const exportCustomProjectHoursExcel = () => {
-    const workbookData = buildCustomProjectHoursExport(data);
+    const workbookData = buildCustomProjectHoursExport(data, workWeeks);
     const ws = XLSX.utils.aoa_to_sheet([workbookData.headers, ...workbookData.rows]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, workbookData.sheetName);
@@ -1525,7 +1525,7 @@ const App = () => {
   const reportingDeptCount = Object.keys(reportingByDept).length;
   const approvalPendingCount = useMemo(() => approvalRecords.reduce((sum, row) => sum + row.count, 0), [approvalRecords]);
   const approvalPendingHours = useMemo(() => approvalRecords.reduce((sum, row) => sum + row.total_hours, 0), [approvalRecords]);
-  const customDataPreview = useMemo(() => buildCustomProjectHoursExport(data), [data]);
+  const customDataPreview = useMemo(() => buildCustomProjectHoursExport(data, workWeeks), [data, workWeeks]);
   const customDataHasMissingMeta = useMemo(
     () => data.some(entry => entry.category === 'Project' && (!entry.department_full || !entry.position)),
     [data]
