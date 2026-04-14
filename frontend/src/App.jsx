@@ -817,12 +817,12 @@ const App = () => {
   t.customDataHeroTitle = lang === 'zh' ? '定制化数据导出' : 'Custom Data Export';
   t.customDataTitle = lang === 'zh' ? '每项目工时数据导出' : 'Project Hours Data Export';
   t.customDataSubtitle = lang === 'zh'
-    ? '按 Project + Close 口径导出每项目工时宽表。'
-    : 'Export a wide monthly workbook using the Project + Close scope.';
+    ? '按 Project + Close 口径导出；月列按「工作周划分」归属 work_month（与后台一致），无划分表时退回自然月。'
+    : 'Project + Close export; month columns use work-week rules (work_month), same as backend; calendar month if no work-week table.';
   t.exportCustomData = lang === 'zh' ? '导出每项目工时' : 'Export Project Hours';
   t.customDataScope = lang === 'zh'
-    ? '默认导出全部项目，不做筛选，月份会按最早到最晚连续展开。'
-    : 'Exports all projects by default with continuous month columns from earliest to latest.';
+    ? '导出全部 Close 项目行；仅列出有数据的 work_month 列（不补空月）。'
+    : 'All Close project rows; only work_month columns that have data (no gap months).';
   t.customDataReuploadHint = lang === 'zh'
     ? '若历史工时尚未按新解析逻辑重传，“所属部门/职位” 可能为空。'
     : 'If historical timesheets have not been re-uploaded, full department and position may still be empty.';
@@ -1388,12 +1388,25 @@ const App = () => {
     XLSX.writeFile(wb, `完整填报率_${periodLabel}_target${targetHours}h.xlsx`);
   };
 
-  const exportCustomProjectHoursExcel = () => {
-    const workbookData = buildCustomProjectHoursExport(data, workWeeks);
-    const ws = XLSX.utils.aoa_to_sheet([workbookData.headers, ...workbookData.rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, workbookData.sheetName);
-    XLSX.writeFile(wb, workbookData.filename);
+  const exportCustomProjectHoursExcel = async () => {
+    try {
+      let weeks = workWeeks;
+      if (!weeks.length) {
+        const res = await fetch(`${API_BASE_URL}/work-weeks`);
+        if (res.ok) {
+          const json = await res.json();
+          weeks = Array.isArray(json) ? json : [];
+          if (weeks.length) setWorkWeeks(weeks);
+        }
+      }
+      const workbookData = buildCustomProjectHoursExport(data, weeks);
+      const ws = XLSX.utils.aoa_to_sheet([workbookData.headers, ...workbookData.rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, workbookData.sheetName);
+      XLSX.writeFile(wb, workbookData.filename);
+    } catch (err) {
+      alert(`${lang === 'zh' ? '导出失败' : 'Export failed'}: ${err.message}`);
+    }
   };
 
   const dashPeriodOptions = useMemo(() => dataHelper.getReportingPeriodOptions(data), [data]);

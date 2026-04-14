@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 
-const resolveWorkMonthKey = (dateStr, workWeeks = []) => {
+/** 与 backend `_resolve_entry_work_month` 一致：日期落在某周 [week_start, week_end] 则用 work_month，否则自然月。 */
+export const resolveWorkMonthKey = (dateStr, workWeeks = []) => {
   const d = dayjs(dateStr);
   if (!d.isValid()) return "";
   if (workWeeks && workWeeks.length > 0) {
