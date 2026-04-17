@@ -26,6 +26,7 @@ DEFAULT_DEPT_MAPPING = {
     "135.2 R&D - Product Marketing": "PM",
     "105 R&D - Analog": "Analog",
     "310.2 Marketing - Product": "PM",
+    "310.2 Marketing \u2013 Product": "PM",
     "360 System": "AE",
 }
 
