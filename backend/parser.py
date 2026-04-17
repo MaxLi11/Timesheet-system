@@ -24,6 +24,9 @@ DEFAULT_DEPT_MAPPING = {
     "125 R&D - System Eng SW": "SW",
     "125.2 R&D - System Eng SW": "SW",
     "135.2 R&D - Product Marketing": "PM",
+    "105 R&D - Analog": "Analog",
+    "310.2 Marketing - Product": "PM",
+    "360 System": "AE",
 }
 
 _DEPT_MAPPING_CACHE = DEFAULT_DEPT_MAPPING.copy()
