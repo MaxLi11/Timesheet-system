@@ -361,13 +361,7 @@ def _extract_employee_profiles(workbook):
 
 
 def _extract_department_mapping(workbook):
-    for _, df in workbook.items():
-        if not isinstance(df, pd.DataFrame):
-            continue
-        if df.shape[1] < 2 or df.shape[0] < 5:
-            continue
-        if _is_timesheet_frame(df):
-            continue
+    def _build_mapping(df):
         mapping = {}
         for _, row in df.iloc[:, :2].iterrows():
             full_name = _clean_text(row.iloc[0])
@@ -375,6 +369,28 @@ def _extract_department_mapping(workbook):
             if not full_name or not short_name:
                 continue
             mapping[full_name] = short_name
+            stripped = re.sub(r"\s*\([^)]*\)\s*$", "", full_name).strip()
+            if stripped and stripped != full_name:
+                mapping.setdefault(stripped, short_name)
+        return mapping
+
+    # First pass: look for sheet whose first two columns are 部门/简称
+    for _, df in workbook.items():
+        if not isinstance(df, pd.DataFrame) or df.shape[1] < 2 or df.shape[0] < 5:
+            continue
+        cols = [str(c).strip() for c in df.columns[:2]]
+        if "部门" in cols[0] and "简称" in cols[1]:
+            mapping = _build_mapping(df)
+            if mapping:
+                return mapping
+
+    # Second pass: generic heuristic (original logic)
+    for _, df in workbook.items():
+        if not isinstance(df, pd.DataFrame) or df.shape[1] < 2 or df.shape[0] < 5:
+            continue
+        if _is_timesheet_frame(df):
+            continue
+        mapping = _build_mapping(df)
         if len(mapping) >= 20:
             return mapping
     return {}
