@@ -353,6 +353,7 @@ def _extract_employee_profiles(workbook):
                 "department_full": _clean_text(row.get('部门', '')),
                 "position":        _clean_text(row.get('岗位', '')),
                 "department":      _clean_text(row.get('部门简称', '')),
+                "team_leader":     _clean_text(row.get('Team leader', '')),
                 "employee_status": "",  # 新表所有人均为在职，无离职标记列
             })
         if profiles:

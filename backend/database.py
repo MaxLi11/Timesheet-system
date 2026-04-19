@@ -32,6 +32,7 @@ class Employee(Base):
     company = Column(String)
     position = Column(String)
     status = Column(String)
+    team_leader = Column(String)
 
 
 class TimeEntry(Base):
@@ -147,6 +148,7 @@ def _backfill_employee_columns():
     required_columns = {
         "status": "VARCHAR",
         "department_abbr": "VARCHAR",
+        "team_leader": "VARCHAR",
     }
 
     with engine.begin() as connection:

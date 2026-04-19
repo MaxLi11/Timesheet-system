@@ -161,6 +161,7 @@ def save_employee_profiles(db: Session, profiles: list):
             "department": (profile.get("department_full") or "").strip(),
             "department_abbr": (profile.get("department") or "").strip(),
             "position": (profile.get("position") or "").strip(),
+            "team_leader": (profile.get("team_leader") or "").strip(),
             "status": (profile.get("employee_status") or "").strip(),
         }
 
@@ -186,6 +187,7 @@ def get_active_employees(db: Session):
             "department": row.department_abbr or "",  # 部门简称，供漏填检查基数使用
             "position": row.position or "",
             "status": row.status or "",
+            "team_leader": row.team_leader or "",
         }
         for row in rows
     ]
