@@ -1,6 +1,8 @@
 import os
 import re
-from datetime import date, datetime
+import calendar
+import numpy as np
+from datetime import date, datetime, date as date_cls
 from pathlib import Path
 
 import pandas as pd
@@ -122,103 +124,161 @@ def parse_timesheet(file_path: str, include_metadata: bool = False):
         if not timesheet_frames:
             raise ValueError("未找到可解析的工时数据sheet。")
 
-        # 步骤4：从第一个工时表（表1主工时）解析基础工时
-        #         然后把其余工时表（表2原OA）的工时按员工+项目+月份累加进来
         required_columns = ["员工", "所属部门", "工号", "开始日期", "结束日期"]
-
-        # 用字典做去重+累加：key=(employee_name, project_name, category, start_date, end_date)
-        # 注意：原OA补录按月对应，相同员工+项目+月的工时累加
         entries_map = {}
 
+        # 别名映射：小写 key，提前构建一次
+        alias_lower = {k.lower(): v for k, v in project_alias_mapping.items()}
+
         def _parse_frame_rows(df, is_supplemental=False):
+            """向量化解析：所有列预先提取为 numpy 数组，只保留必要的 Python 循环。"""
             missing_columns = [c for c in required_columns if c not in df.columns]
             if missing_columns:
                 if is_supplemental:
-                    return  # 补录表允许跳过，不报错
+                    return
                 raise ValueError(f"Excel文件中缺少以下必填列: {', '.join(missing_columns)}。")
 
-            for _, row in df.iterrows():
-                category, project_name, hours_value = _resolve_timesheet_identity(
-                    row, project_alias_mapping
-                )
+            n = len(df)
+            if n == 0:
+                return
+
+            # ── 向量化列提取（替代 iterrows 中的 row.get） ────────────────────
+            def _vcol(col):
+                """把指定列提取为干净的字符串 numpy 数组，NaN / 'nan' → ''。"""
+                if col not in df.columns:
+                    return np.full(n, '', dtype=object)
+                arr = df[col].fillna('').astype(str).str.strip().values
+                # 把字面量 'nan' / 'None' 替换为空字符串
+                arr[arr == 'nan']  = ''
+                arr[arr == 'None'] = ''
+                return arr
+
+            emp_arr      = _vcol('员工')
+            dept_arr     = _vcol('所属部门')
+            emp_id_arr   = _vcol('工号')
+            pos_arr      = _vcol('职位')
+            task_arr     = _vcol('任务详情')
+            approval_arr = _vcol('核准状态')
+            node_arr     = _vcol('当前节点')
+            approver_arr = _vcol('未操作者')
+            proj_new_arr = _vcol('项目名称(新)')
+            proj_old_arr = _vcol('项目名称(作废)')
+            non_proj_arr = _vcol('非项目名称')
+
+            def _vnum(col):
+                if col not in df.columns:
+                    return np.full(n, np.nan)
+                return pd.to_numeric(df[col], errors='coerce').values
+
+            hours_proj_arr     = _vnum('合计_项目')
+            hours_non_proj_arr = _vnum('合计_非项目')
+
+            # ── 批量日期解析（最大加速点，替代逐行 _normalize_excel_date）───────
+            start_list = [
+                d.date() if pd.notna(d) else None
+                for d in pd.to_datetime(df['开始日期'], errors='coerce')
+            ]
+            end_list = [
+                d.date() if pd.notna(d) else None
+                for d in pd.to_datetime(df['结束日期'], errors='coerce')
+            ]
+
+            # ── 主循环：仅做数组索引，无 Series 构建开销 ─────────────────────
+            for i in range(n):
+                employee_name = emp_arr[i]
+                if not employee_name:
+                    continue
+
+                # 解析 category / project_name / hours
+                pnew = proj_new_arr[i]
+                if pnew:
+                    category     = 'Project'
+                    project_name = alias_lower.get(pnew.lower(), pnew)
+                    hours_raw    = hours_proj_arr[i]
+                else:
+                    pold = proj_old_arr[i]
+                    if pold:
+                        category     = 'Project'
+                        project_name = alias_lower.get(pold.lower(), pold)
+                        hours_raw    = hours_proj_arr[i]
+                    else:
+                        np_name = non_proj_arr[i]
+                        if np_name:
+                            category     = 'Non-Project'
+                            project_name = np_name
+                            hours_raw    = hours_non_proj_arr[i]
+                        else:
+                            continue
+
                 if not project_name:
                     continue
 
-                employee_name = _clean_text(row.get("员工"))
-                numeric_hours = pd.to_numeric(hours_value, errors="coerce")
-                if not employee_name or pd.isna(numeric_hours) or float(numeric_hours) == 0:
+                # NaN 检查（pd.to_numeric 结果为 float64，nan != nan）
+                if hours_raw != hours_raw or hours_raw == 0:
                     continue
 
-                start_date = _normalize_excel_date(row.get("开始日期"))
-                end_date = _normalize_excel_date(row.get("结束日期"))
-                if not start_date or not end_date:
+                start_date = start_list[i]
+                end_date   = end_list[i]
+                if start_date is None or end_date is None:
                     continue
 
-                profile = employee_lookup.get(employee_name, {})
-                profile_department = _clean_text(profile.get("department_full"))
-                profile_position = _clean_text(profile.get("position"))
-                profile_status = _clean_text(profile.get("employee_status"))
+                profile            = employee_lookup.get(employee_name, {})
+                profile_department = profile.get('department_full') or ''
+                profile_position   = profile.get('position') or ''
+                profile_status     = profile.get('employee_status') or ''
 
-                raw_department = _clean_text(row.get("所属部门")) or profile_department
+                raw_department = dept_arr[i] or profile_department
 
-                # 原OA补录按月累加：key用(员工, 项目, category, 年月)
-                # 主表（表1）用精确日期作为key，保留每一条独立记录
                 if is_supplemental:
-                    month_key = start_date.strftime("%Y-%m")
+                    month_key = start_date.strftime('%Y-%m')
                     merge_key = (employee_name, project_name, category, month_key)
                     if merge_key in entries_map:
-                        entries_map[merge_key]["hours"] += float(numeric_hours)
+                        entries_map[merge_key]['hours'] += float(hours_raw)
                         continue
-                    # 原OA新增条目，用当月第一天作为start_date
-                    import calendar
-                    last_day = calendar.monthrange(start_date.year, start_date.month)[1]
-                    from datetime import date as date_type
-                    supplemental_start = date_type(start_date.year, start_date.month, 1)
-                    supplemental_end = date_type(start_date.year, start_date.month, last_day)
+                    last_day  = calendar.monthrange(start_date.year, start_date.month)[1]
+                    s_start   = date_cls(start_date.year, start_date.month, 1)
+                    s_end     = date_cls(start_date.year, start_date.month, last_day)
                 else:
-                    # 主表每条记录用唯一序号区分，完整保留所有条目
                     merge_key = (employee_name, project_name, category, start_date, end_date, len(entries_map))
-                    supplemental_start = start_date
-                    supplemental_end = end_date
+                    s_start   = start_date
+                    s_end     = end_date
 
                 entry = {
-                    "employee_name": employee_name,
-                    "employee_id": _clean_text(row.get("工号")) or _clean_text(profile.get("employee_id")),
-                    "employee_status": profile_status,
-                    "department": _map_department_name(raw_department, dept_mapping),
-                    "department_full": profile_department or raw_department,
-                    "position": profile_position or _clean_text(row.get("职位")),
-                    "project_name": project_name,
-                    "category": category,
-                    "start_date": supplemental_start if is_supplemental else start_date,
-                    "end_date": supplemental_end if is_supplemental else end_date,
-                    "hours": float(numeric_hours),
-                    "task_details": _clean_text(row.get("任务详情")),
-                    "approval_status": _clean_text(row.get("核准状态")),
-                    "current_node": _clean_text(row.get("当前节点")),
-                    "pending_approver": _clean_text(row.get("未操作者")),
+                    'employee_name':    employee_name,
+                    'employee_id':      emp_id_arr[i] or (profile.get('employee_id') or ''),
+                    'employee_status':  profile_status,
+                    'department':       _map_department_name(raw_department, dept_mapping),
+                    'department_full':  profile_department or raw_department,
+                    'position':         profile_position or pos_arr[i],
+                    'project_name':     project_name,
+                    'category':         category,
+                    'start_date':       s_start,
+                    'end_date':         s_end,
+                    'hours':            float(hours_raw),
+                    'task_details':     task_arr[i],
+                    'approval_status':  approval_arr[i],
+                    'current_node':     node_arr[i],
+                    'pending_approver': approver_arr[i],
                 }
 
                 if merge_key not in entries_map:
                     entries_map[merge_key] = entry
                 else:
-                    # 主表中同月同员工同项目的多条记录，工时累加
-                    entries_map[merge_key]["hours"] += float(numeric_hours)
+                    entries_map[merge_key]['hours'] += float(hours_raw)
 
-        # 先解析表1（主工时，第一个识别到的工时表）
+        # 先解析表1（主工时）
         _parse_frame_rows(timesheet_frames[0], is_supplemental=False)
-
-        # 再把其余工时表（原OA补录等）按月累加进来
+        # 再累加其余补录表
         for supplemental_df in timesheet_frames[1:]:
             _parse_frame_rows(supplemental_df, is_supplemental=True)
 
         entries = list(entries_map.values())
 
         if include_metadata:
-            return {"entries": entries, "employee_profiles": employee_profiles}
+            return {'entries': entries, 'employee_profiles': employee_profiles}
         return entries
     except Exception as exc:
-        raise Exception(f"解析Excel失败: {exc}") from exc
+        raise Exception(f'解析Excel失败: {exc}') from exc
 
 
 def _normalize_timesheet_columns(columns):
