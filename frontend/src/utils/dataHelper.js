@@ -194,13 +194,23 @@ export const computeReportingRate = (entries, filterYear, filterMonth, filterWee
 
     const getMonthNum = (d) => String(d.month() + 1).padStart(2, '0');
 
-    if (filterWeek && filterWeek.week_start) {
-        // Week-level: 用工作周的日期范围判断
-        const ws = dayjs(filterWeek.week_start);
-        const we = dayjs(filterWeek.week_end);
-        const weekLabel = filterWeek.week_code || filterWeek.week_start;
-        getPeriodKey = () => weekLabel;
-        passesFilter = (d) => !d.isBefore(ws, 'day') && !d.isAfter(we, 'day');
+    if (filterWeek) {
+        if (typeof filterWeek === 'object' && filterWeek.week_start) {
+            // Week-level: 用工作周的日期范围判断
+            const ws = dayjs(filterWeek.week_start);
+            const we = dayjs(filterWeek.week_end);
+            const weekLabel = filterWeek.week_code || filterWeek.week_start;
+            getPeriodKey = () => weekLabel;
+            passesFilter = (d) => !d.isBefore(ws, 'day') && !d.isAfter(we, 'day');
+        } else {
+            // ISO 后备周逻辑：当未上传工作周表时生效
+            const weekStr = typeof filterWeek === 'object' ? filterWeek.week : filterWeek;
+            const weekNum = parseInt(weekStr, 10);
+            getPeriodKey = () => `${filterYear}-W${String(weekNum).padStart(2, '0')}`;
+            passesFilter = (d) =>
+                String(d.year()) === filterYear &&
+                d.isoWeek() === weekNum;
+        }
     } else if (filterMonth) {
         // Month-level
         getPeriodKey = (d) => d.format('YYYY-MM');
@@ -286,9 +296,16 @@ export const computeReportingCompleteness = (
     // filterYear  格式: '2026'
     // filterMonth 格式: '03'（两位月份数字）
     // filterWeek  格式: { week_start, week_end, week_code }（工作周对象）或空
-    const hasWeekRange = filterWeek && filterWeek.week_start;
-    const weekStart = hasWeekRange ? dayjs(filterWeek.week_start) : null;
-    const weekEnd   = hasWeekRange ? dayjs(filterWeek.week_end)   : null;
+    const hasWeekRange = filterWeek && (typeof filterWeek === 'string' || filterWeek.week || filterWeek.week_start);
+    let weekStart = null, weekEnd = null, isoWeekNum = null;
+    if (hasWeekRange) {
+        if (typeof filterWeek === 'object' && filterWeek.week_start) {
+            weekStart = dayjs(filterWeek.week_start);
+            weekEnd = dayjs(filterWeek.week_end);
+        } else {
+            isoWeekNum = parseInt(typeof filterWeek === 'object' ? filterWeek.week : filterWeek, 10);
+        }
+    }
 
     const submittedSet = new Set();
     entries.forEach(entry => {
@@ -299,8 +316,13 @@ export const computeReportingCompleteness = (
             const d = dayjs(entry.start_date);
             if (!d.isValid()) return;
             if (hasWeekRange) {
-                // 用工作周日期范围判断，忽略 filterYear/filterMonth（周范围已隐含）
-                if (d.isBefore(weekStart, 'day') || d.isAfter(weekEnd, 'day')) return;
+                if (weekStart) {
+                    // Custom Work Week
+                    if (d.isBefore(weekStart, 'day') || d.isAfter(weekEnd, 'day')) return;
+                } else {
+                    // ISO Week Fallback
+                    if (String(d.year()) !== filterYear || d.isoWeek() !== isoWeekNum) return;
+                }
             } else {
                 if (filterYear && d.year().toString() !== filterYear) return;
                 if (filterMonth && (d.month() + 1).toString().padStart(2, '0') !== filterMonth) return;

@@ -355,12 +355,12 @@ export const OverviewPanel = ({ data, workWeeks, t, uiText, pageMeta, statusLabe
               <div className="filter-group">
                 <label>{t.selectWeek}</label>
                 <select
-                  value={dashWeek ? dashWeek.week_code : ''}
+                  value={dashWeek ? (dashWeek.week_code || dashWeek.week || dashWeek) : ''}
                   onChange={e => {
                     const code = e.target.value;
                     if (!code) { setDashWeek(null); return; }
                     const ww = workWeeks.find(w => w.week_code === code);
-                    setDashWeek(ww || null);
+                    setDashWeek(ww || { week: code, isIso: true });
                   }}
                 >
                   <option value="">{t.allWeeks}</option>

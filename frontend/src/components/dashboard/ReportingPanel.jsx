@@ -133,12 +133,12 @@ export const ReportingPanel = ({
               <div className="filter-group">
                 <label>{t.selectWeek}</label>
                 <select
-                  value={filterWeek ? (filterWeek.week_code || '') : ''}
+                  value={filterWeek ? (filterWeek.week_code || filterWeek.week || filterWeek) : ''}
                   onChange={e => {
                     const code = e.target.value;
                     if (!code) { setFilterWeek(null); return; }
                     const ww = workWeeks.find(w => w.week_code === code);
-                    setFilterWeek(ww || null);
+                    setFilterWeek(ww || { week: code, isIso: true });
                   }}
                 >
                   <option value="">{t.allWeeks}</option>
@@ -289,12 +289,12 @@ export const ReportingPanel = ({
               <div className="filter-group">
                 <label>{t.selectWeek}</label>
                 <select
-                  value={completenessWeek ? (completenessWeek.week_code || '') : ''}
+                  value={completenessWeek ? (completenessWeek.week_code || completenessWeek.week || completenessWeek) : ''}
                   onChange={e => {
                     const code = e.target.value;
                     if (!code) { setCompletenessWeek(null); return; }
                     const ww = workWeeks.find(w => w.week_code === code);
-                    setCompletenessWeek(ww || null);
+                    setCompletenessWeek(ww || { week: code, isIso: true });
                   }}
                 >
                   <option value="">{t.allWeeks}</option>
