@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import EChartsReact from 'echarts-for-react';
 import { ChevronDown } from 'lucide-react';
 import * as dataHelper from '../../utils/dataHelper';
+import { getEntryWorkMonth } from '../../utils/dataHelper';
 import { EDITORIAL_THEME, tooltipBase, chartText, chartAxis, chartSplitLine } from '../../constants/theme';
 
 export const OverviewPanel = ({ data, workWeeks, t, uiText, pageMeta, statusLabel }) => {
@@ -25,19 +26,24 @@ export const OverviewPanel = ({ data, workWeeks, t, uiText, pageMeta, statusLabe
       if (item.category === 'Non-Project') return false;
       if (dashYear || dashMonth || dashWeek) {
         if (!item.start_date) return false;
-        const itemDate = dayjs(item.start_date);
-        if (dashYear && itemDate.year().toString() !== dashYear) return false;
-        if (dashMonth && (itemDate.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
         if (dashWeek && dashWeek.week_start) {
+          const itemDate = dayjs(item.start_date);
           if (itemDate.isBefore(dayjs(dashWeek.week_start), 'day') ||
               itemDate.isAfter(dayjs(dashWeek.week_end), 'day')) return false;
+        } else {
+          // 统一口径：按工作周归属月（week_end 所在月）比对
+          const entryMonth = getEntryWorkMonth(item, workWeeks);
+          const entryYear = entryMonth.slice(0, 4);
+          const entryMonthNum = entryMonth.slice(5, 7);
+          if (dashYear && entryYear !== dashYear) return false;
+          if (dashMonth && entryMonthNum !== dashMonth) return false;
         }
       }
       if (dashSelectedDepts.size > 0 && !dashSelectedDepts.has(item.department)) return false;
       if (dashSelectedProjects.size > 0 && !dashSelectedProjects.has(item.project_name)) return false;
       return true;
     });
-  }, [data, dashYear, dashMonth, dashWeek, dashSelectedDepts, dashSelectedProjects]);
+  }, [data, dashYear, dashMonth, dashWeek, dashSelectedDepts, dashSelectedProjects, workWeeks]);
 
   const dashAvailableDepts = useMemo(() => {
     if (!dashYear && !dashMonth && !dashWeek)
@@ -46,16 +52,18 @@ export const OverviewPanel = ({ data, workWeeks, t, uiText, pageMeta, statusLabe
     const timeFiltered = data.filter(item => {
       if (item.category === 'Non-Project') return false;
       if (!item.start_date) return false;
-      const d = dayjs(item.start_date);
-      if (dashYear && d.year().toString() !== dashYear) return false;
-      if (dashMonth && (d.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
       if (dashWeek && dashWeek.week_start) {
+        const d = dayjs(item.start_date);
         if (d.isBefore(dayjs(dashWeek.week_start), 'day') || d.isAfter(dayjs(dashWeek.week_end), 'day')) return false;
+      } else {
+        const entryMonth = getEntryWorkMonth(item, workWeeks);
+        if (dashYear && entryMonth.slice(0, 4) !== dashYear) return false;
+        if (dashMonth && entryMonth.slice(5, 7) !== dashMonth) return false;
       }
       return true;
     });
     return Array.from(new Set(timeFiltered.map(i => i.department).filter(Boolean))).sort();
-  }, [data, dashYear, dashMonth, dashWeek]);
+  }, [data, dashYear, dashMonth, dashWeek, workWeeks]);
 
   const dashAvailableProjects = useMemo(() => {
     if (!dashYear && !dashMonth && !dashWeek && dashSelectedDepts.size === 0)
@@ -65,18 +73,20 @@ export const OverviewPanel = ({ data, workWeeks, t, uiText, pageMeta, statusLabe
       if (item.category === 'Non-Project') return false;
       if (dashYear || dashMonth || dashWeek) {
         if (!item.start_date) return false;
-        const d = dayjs(item.start_date);
-        if (dashYear && d.year().toString() !== dashYear) return false;
-        if (dashMonth && (d.month() + 1).toString().padStart(2, '0') !== dashMonth) return false;
         if (dashWeek && dashWeek.week_start) {
+          const d = dayjs(item.start_date);
           if (d.isBefore(dayjs(dashWeek.week_start), 'day') || d.isAfter(dayjs(dashWeek.week_end), 'day')) return false;
+        } else {
+          const entryMonth = getEntryWorkMonth(item, workWeeks);
+          if (dashYear && entryMonth.slice(0, 4) !== dashYear) return false;
+          if (dashMonth && entryMonth.slice(5, 7) !== dashMonth) return false;
         }
       }
       if (dashSelectedDepts.size > 0 && !dashSelectedDepts.has(item.department)) return false;
       return true;
     });
     return Array.from(new Set(preFiltered.map(i => i.project_name).filter(Boolean))).sort();
-  }, [data, dashYear, dashMonth, dashWeek, dashSelectedDepts]);
+  }, [data, dashYear, dashMonth, dashWeek, dashSelectedDepts, workWeeks]);
 
   const toggleDashDept = (dept) => {
     setDashSelectedDepts(prev => {

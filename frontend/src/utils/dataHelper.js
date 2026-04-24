@@ -8,6 +8,36 @@ dayjs.extend(quarterOfYear);
 dayjs.extend(isoWeek);
 
 /**
+ * 统一月份归属口径（与后端一致）：
+ *   1. 若提供 workWeeks，以 start_date 匹配工作周区间，取该周 work_month
+ *      （work_month 已由后端按 week_end 所在月计算，跨月周归次月）
+ *   2. 无匹配时兜底：优先用 end_date 所在自然月，无 end_date 用 start_date 自然月
+ *
+ * @param {object} entry      - 含 start_date / end_date 字段的条目
+ * @param {Array}  workWeeks  - 工作周表（可选，格式 [{week_start, week_end, work_month}]）
+ * @returns {string}          - 'YYYY-MM'
+ */
+export const getEntryWorkMonth = (entry, workWeeks = []) => {
+    const start = entry.start_date ? dayjs(entry.start_date) : null;
+    if (!start || !start.isValid()) return '';
+
+    if (workWeeks.length > 0) {
+        const found = workWeeks.find(w =>
+            !start.isBefore(dayjs(w.week_start), 'day') &&
+            !start.isAfter(dayjs(w.week_end), 'day')
+        );
+        if (found && found.work_month) return found.work_month;
+    }
+
+    // 兜底：优先用 end_date 所在月（与后端 week_end 口径对齐）
+    if (entry.end_date) {
+        const end = dayjs(entry.end_date);
+        if (end.isValid()) return end.format('YYYY-MM');
+    }
+    return start.format('YYYY-MM');
+};
+
+/**
  * 根据 start_date 在工作周表中查找所属 week_code。
  * 找不到时降级返回 ISO 周格式（兼容历史数据）。
  */
@@ -38,7 +68,7 @@ export const aggregateData = (entries, period = 'monthly') => {
         if (period === 'weekly') {
             key = `${date.year()}-W${date.week()}`;
         } else if (period === 'monthly') {
-            key = date.format('YYYY-MM');
+            key = getEntryWorkMonth(entry);
         } else if (period === 'quarterly') {
             key = `${date.year()}-Q${date.quarter()}`;
         } else {
@@ -102,8 +132,8 @@ export const aggregateProjectData = (data, periodType = 'monthly', workWeeks = [
             const q = Math.ceil((d.month() + 1) / 3);
             timeKey = `${d.year()}-Q${q}`;
         } else {
-            // default monthly
-            timeKey = d.format('YYYY-MM');
+            // default monthly：按统一口径（work_month 或 end_date 所在月）
+            timeKey = getEntryWorkMonth(item, workWeeks);
         }
 
         if (!timeMap[timeKey]) timeMap[timeKey] = {};
@@ -142,11 +172,12 @@ export const getReportingPeriodOptions = (entries) => {
     entries.forEach(entry => {
         if (!entry.start_date) return;
 
+        const entryMonth = getEntryWorkMonth(entry);  // 统一口径：工作周归属月
+        const year = entryMonth.slice(0, 4);
+        const monthNum = entryMonth.slice(5, 7);
         const d = dayjs(entry.start_date);
-        const year = String(d.year());
-        const monthNum = String(d.month() + 1).padStart(2, '0');
         const weekNum = String(d.isoWeek()).padStart(2, '0');
-        const ymKey = `${year}-${monthNum}`;
+        const ymKey = entryMonth;  // 'YYYY-MM'
 
         years.add(year);
 
@@ -179,6 +210,7 @@ export const getReportingPeriodOptions = (entries) => {
  * @param {string} filterMonth - Optional: '2026-03' (for monthly view)
  * @param {string} filterWeek  - Optional: '2026-W10' (for weekly view within month)
  * @param {number} targetHours - User-provided target
+ * @param {Array}  workWeeks   - Custom work week definitions
  */
 /** 完整填报率汇总只按人员姓名，不使用工号 */
 const reportingEmployeeGroupKey = (entry) => (entry.employee_name || '').trim() || 'unknown';
@@ -186,7 +218,7 @@ const reportingEmployeeGroupKey = (entry) => (entry.employee_name || '').trim() 
 // filterWeek 可以是:
 //   - { week_start: 'YYYY-MM-DD', week_end: 'YYYY-MM-DD', week_code: '...' }（工作周表）
 //   - '' / null / undefined（未选）
-export const computeReportingRate = (entries, filterYear, filterMonth, filterWeek, targetHours) => {
+export const computeReportingRate = (entries, filterYear, filterMonth, filterWeek, targetHours, workWeeks = []) => {
     if (!filterYear) return [];
 
     // Determine aggregation key and filter predicate
@@ -212,11 +244,31 @@ export const computeReportingRate = (entries, filterYear, filterMonth, filterWee
                 d.isoWeek() === weekNum;
         }
     } else if (filterMonth) {
-        // Month-level
-        getPeriodKey = (d) => d.format('YYYY-MM');
-        passesFilter = (d) => 
-            String(d.year()) === filterYear && 
-            getMonthNum(d) === filterMonth;
+        // Month-level: 优先遵循工作周表的划定
+        const targetWorkMonth = `${filterYear}-${filterMonth}`;
+        const targetWeeks = (workWeeks || []).filter(w => w.work_month === targetWorkMonth);
+        
+        getPeriodKey = () => targetWorkMonth;
+        
+        if (targetWeeks.length > 0) {
+            // 计算该工作月的最早开始日期和最晚结束日期，形成连续大区间
+            // 避免用户仅配置了周一到周五导致周末工时被过滤
+            let minWs = dayjs(targetWeeks[0].week_start);
+            let maxWe = dayjs(targetWeeks[0].week_end);
+            targetWeeks.forEach(w => {
+                const ws = dayjs(w.week_start);
+                const we = dayjs(w.week_end);
+                if (ws.isBefore(minWs, 'day')) minWs = ws;
+                if (we.isAfter(maxWe, 'day')) maxWe = we;
+            });
+            
+            passesFilter = (d) => !d.isBefore(minWs, 'day') && !d.isAfter(maxWe, 'day');
+        } else {
+            // 降级：自然月
+            passesFilter = (d) => 
+                String(d.year()) === filterYear && 
+                getMonthNum(d) === filterMonth;
+        }
     } else {
         // Year-level
         getPeriodKey = (d) => d.format('YYYY-MM');
@@ -258,7 +310,8 @@ export const computeReportingCompleteness = (
     activeEmployees,       // 保留参数签名兼容性，但实际不依赖（employees表为空）
     filterYear,
     filterMonth,
-    filterWeek
+    filterWeek,
+    workWeeks = []
 ) => {
     const empty = { missing_by_dept: {}, missing_employees: [], missing_count: 0, no_filter: false };
     const no_filter_result = { missing_by_dept: {}, missing_employees: [], missing_count: 0, no_filter: true };
@@ -307,6 +360,12 @@ export const computeReportingCompleteness = (
         }
     }
 
+    // Pre-calculate target weeks for work month if needed
+    const targetWorkMonth = (filterYear && filterMonth) ? `${filterYear}-${filterMonth}` : null;
+    const targetMonthWeeks = (targetWorkMonth && Array.isArray(workWeeks)) 
+        ? workWeeks.filter(w => w.work_month === targetWorkMonth) 
+        : [];
+
     const submittedSet = new Set();
     entries.forEach(entry => {
         const employeeName = (entry.employee_name || '').trim();
@@ -323,9 +382,25 @@ export const computeReportingCompleteness = (
                     // ISO Week Fallback
                     if (String(d.year()) !== filterYear || d.isoWeek() !== isoWeekNum) return;
                 }
+            } else if (filterMonth && targetMonthWeeks.length > 0) {
+                // Work Month logic (continuous range to avoid weekend gaps)
+                let minWs = dayjs(targetMonthWeeks[0].week_start);
+                let maxWe = dayjs(targetMonthWeeks[0].week_end);
+                targetMonthWeeks.forEach(w => {
+                    const ws = dayjs(w.week_start);
+                    const we = dayjs(w.week_end);
+                    if (ws.isBefore(minWs, 'day')) minWs = ws;
+                    if (we.isAfter(maxWe, 'day')) maxWe = we;
+                });
+                if (d.isBefore(minWs, 'day') || d.isAfter(maxWe, 'day')) return;
             } else {
+                // Year or Calendar Month level
                 if (filterYear && d.year().toString() !== filterYear) return;
-                if (filterMonth && (d.month() + 1).toString().padStart(2, '0') !== filterMonth) return;
+                // 统一口径：用工作周归属月（work_month）比对，不用 start_date 自然月
+                if (filterMonth) {
+                    const entryMonth = getEntryWorkMonth(entry);
+                    if (entryMonth !== `${filterYear}-${filterMonth}`) return;
+                }
             }
         }
 
@@ -389,12 +464,11 @@ export const computeApprovalRate = (entries, filterYear, filterMonth, selectedPr
 
     const map = {};
     entries.forEach(entry => {
-        const d = dayjs(entry.start_date);
-        const year = String(d.year());
-        const month = d.format('YYYY-MM');
+        const entryMonth = getEntryWorkMonth(entry);  // 统一口径
+        const year = entryMonth.slice(0, 4);
 
         if (year !== filterYear) return;
-        if (filterMonth && month !== filterMonth) return;
+        if (filterMonth && entryMonth !== filterMonth) return;
         // Project filter (selectedProjects empty = show all)
         if (selectedProjects.size > 0 && !selectedProjects.has(entry.project_name)) return;
         // Approver filter
@@ -425,11 +499,10 @@ export const computeApprovalRate = (entries, filterYear, filterMonth, selectedPr
 export const getApprovalProjects = (entries, filterYear, filterMonth) => {
     const projects = new Set();
     entries.forEach(entry => {
-        const d = dayjs(entry.start_date);
-        const year = String(d.year());
-        const month = d.format('YYYY-MM');
+        const entryMonth = getEntryWorkMonth(entry);  // 统一口径
+        const year = entryMonth.slice(0, 4);
         if (year !== filterYear) return;
-        if (filterMonth && month !== filterMonth) return;
+        if (filterMonth && entryMonth !== filterMonth) return;
         if (entry.project_name) projects.add(entry.project_name);
     });
     return [...projects].sort();
@@ -442,11 +515,10 @@ export const getApprovalProjects = (entries, filterYear, filterMonth) => {
 export const getApprovalApprovers = (entries, filterYear, filterMonth, selectedProjects = new Set()) => {
     const approvers = new Set();
     entries.forEach(entry => {
-        const d = dayjs(entry.start_date);
-        const year = String(d.year());
-        const month = d.format('YYYY-MM');
+        const entryMonth = getEntryWorkMonth(entry);  // 统一口径
+        const year = entryMonth.slice(0, 4);
         if (year !== filterYear) return;
-        if (filterMonth && month !== filterMonth) return;
+        if (filterMonth && entryMonth !== filterMonth) return;
         if (selectedProjects.size > 0 && !selectedProjects.has(entry.project_name)) return;
         const approver = (entry.pending_approver || '').trim();
         if (approver) approvers.add(approver);
@@ -472,7 +544,8 @@ export const aggregateProjectDeptData = (data, periodType, workWeeks = []) => {
         } else if (periodType === 'quarterly') {
             timeKey = `${d.year()}-Q${Math.floor(d.month() / 3) + 1}`;
         } else {
-            timeKey = d.format('YYYY-MM');
+            // monthly：统一口径，按工作周归属月
+            timeKey = getEntryWorkMonth(item, workWeeks);
         }
 
         if (!timeMap[timeKey]) timeMap[timeKey] = {};

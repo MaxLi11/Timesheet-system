@@ -560,6 +560,11 @@ def parse_work_week(file_path: str):
     """
     解析工作周划分 Excel 文件。
     返回列表，每项包含：week_start, week_end, week_code, work_month（格式 YYYY-MM）
+
+    归属月份口径（统一标准）：
+      按 week_end 所在自然月确定 work_month。
+      若某周的结束日期跨入次月，则该周整体归属次月；同月内的周不受影响。
+      Excel 第4列月份标签不再参与计算。
     """
     try:
         df = pd.read_excel(file_path, sheet_name=0, header=None)
@@ -568,8 +573,6 @@ def parse_work_week(file_path: str):
 
     # 第0行是表头，从第1行开始是数据
     results = []
-    current_month_label = None  # 例如 "1月"
-    current_year = None
 
     for row_index in range(1, len(df)):
         row = df.iloc[row_index]
@@ -580,19 +583,8 @@ def parse_work_week(file_path: str):
         if not week_start or not week_end or not week_code:
             continue
 
-        # 从 week_code 推断年份，例如 "202601-W1" -> 2026
-        year_from_code = int(week_code[:4]) if len(week_code) >= 4 else None
-
-        # 工作月份列（第4列），只有每月第一周才有值
-        month_label = str(row.iloc[4]).strip() if pd.notna(row.iloc[4]) else ""
-        if month_label and month_label != "nan":
-            current_month_label = month_label
-            current_year = year_from_code
-
-        # 把 "1月" 转成 "2026-01"
-        work_month = _month_label_to_key(current_month_label, current_year)
-        if not work_month:
-            continue
+        # 统一口径：按 week_end 所在月份归属
+        work_month = week_end.strftime("%Y-%m")
 
         results.append({
             "week_start": week_start,
@@ -602,17 +594,6 @@ def parse_work_week(file_path: str):
         })
 
     return results
-
-
-def _month_label_to_key(label: str, year: int) -> str:
-    """把 '3月' + 2026 转成 '2026-03'"""
-    if not label or not year:
-        return ""
-    try:
-        month_num = int(str(label).replace("月", "").strip())
-        return f"{year}-{month_num:02d}"
-    except (ValueError, AttributeError):
-        return ""
 
 
 if __name__ == "__main__":

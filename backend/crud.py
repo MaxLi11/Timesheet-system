@@ -431,17 +431,21 @@ def save_work_weeks(db: Session, weeks: list):
 _NON_PROJECT_INCLUDE = {"management", "others", "training"}
 
 
-def _resolve_entry_work_month(start_date, work_week_rows: list) -> str:
+def _resolve_entry_work_month(start_date, end_date, work_week_rows: list) -> str:
     """
-    按工作周划分表归属 work_month：start_date 落在某周的 [week_start, week_end] 内则取该周 work_month；
-    否则用 start_date 自然月。与前端仪表盘按周区间匹配一致。
+    按工作周划分表归属 work_month：start_date 落在某周的 [week_start, week_end] 内则取该周 work_month。
+    工作周 work_month 已统一按 week_end 所在月计算（跨月周归次月）。
+
+    兜底（无匹配工作周时）：优先用 end_date 自然月，与工作周口径保持一致；
+    无 end_date 时才退回 start_date 自然月。
     """
     if not start_date:
         return ""
     for w in work_week_rows:
         if w.week_start <= start_date <= w.week_end:
             return w.work_month or ""
-    return start_date.strftime("%Y-%m")
+    fallback_date = end_date if end_date else start_date
+    return fallback_date.strftime("%Y-%m")
 
 
 def _entry_counts_toward_monthly_total(e) -> bool:
@@ -468,7 +472,7 @@ def get_person_month_ratio(db: Session):
     """
     计算每个项目每位员工每月的工时占比。
     Close + 在职；分母 = 项目类 + 非项目 Management/Others/Training。
-    月份：工作周表区间内归属 work_month，否则自然月。
+    月份口径（统一标准）：工作周区间内归属 work_month（已按 week_end 所在月计算），否则用 end_date 自然月。
     """
     work_week_rows = db.query(database.WorkWeek).all()
     entries = _custom_export_base_entries(db)
@@ -477,7 +481,7 @@ def get_person_month_ratio(db: Session):
     for e in entries:
         if not _entry_counts_toward_monthly_total(e):
             continue
-        month = _resolve_entry_work_month(e.start_date, work_week_rows)
+        month = _resolve_entry_work_month(e.start_date, e.end_date, work_week_rows)
         if not month:
             continue
         key = (e.employee_name, month)
@@ -489,7 +493,7 @@ def get_person_month_ratio(db: Session):
     for e in entries:
         if e.category != "Project":
             continue
-        month = _resolve_entry_work_month(e.start_date, work_week_rows)
+        month = _resolve_entry_work_month(e.start_date, e.end_date, work_week_rows)
         if not month:
             continue
         key = (e.project_name, e.employee_name, month)
@@ -542,7 +546,7 @@ def get_person_month_march(db: Session):
     """
     人月行军图：每项目每员工每月项目工时、占比、当月总工时。
     Close + 在职；当月总工时 = 项目 + 非项目 M/O/T；项目格仅 Project。
-    月份归属同 get_person_month_ratio。
+    月份口径（统一标准）：工作周区间内归属 work_month（已按 week_end 所在月计算），否则用 end_date 自然月。
     """
     work_week_rows = db.query(database.WorkWeek).all()
     entries = _custom_export_base_entries(db)
@@ -551,7 +555,7 @@ def get_person_month_march(db: Session):
     for e in entries:
         if not _entry_counts_toward_monthly_total(e):
             continue
-        month = _resolve_entry_work_month(e.start_date, work_week_rows)
+        month = _resolve_entry_work_month(e.start_date, e.end_date, work_week_rows)
         if not month:
             continue
         key = (e.employee_name, month)
@@ -562,7 +566,7 @@ def get_person_month_march(db: Session):
     for e in entries:
         if e.category != "Project":
             continue
-        month = _resolve_entry_work_month(e.start_date, work_week_rows)
+        month = _resolve_entry_work_month(e.start_date, e.end_date, work_week_rows)
         if not month:
             continue
         key = (e.project_name, e.employee_name, month)
@@ -618,7 +622,7 @@ def get_person_month_march(db: Session):
 def get_employee_monthly_total(db: Session):
     """
     每人每月总工时：Close + 在职；统计项目 + 非项目 Management/Others/Training。
-    月份归属同 get_person_month_ratio。
+    月份口径（统一标准）：工作周区间内归属 work_month（已按 week_end 所在月计算），否则用 end_date 自然月。
     """
     work_week_rows = db.query(database.WorkWeek).all()
     entries = _custom_export_base_entries(db)
@@ -627,7 +631,7 @@ def get_employee_monthly_total(db: Session):
     for e in entries:
         if not _entry_counts_toward_monthly_total(e):
             continue
-        month = _resolve_entry_work_month(e.start_date, work_week_rows)
+        month = _resolve_entry_work_month(e.start_date, e.end_date, work_week_rows)
         if not month:
             continue
         key = (e.employee_name, month)

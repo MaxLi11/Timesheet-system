@@ -274,7 +274,7 @@ def get_person_month_ratio(db: Session = Depends(get_db)):
     """
     返回每个项目每位员工每月的工时占比数据。
     Close + 在职；分母 = 项目 + 非项目 M/O/T；分子仅项目。
-    月份：start_date 落在 work_weeks 某周区间内则用 work_month，否则自然月。
+    月份口径（统一标准）：周结束日服在次月的，周整体归属次月；同月周不变。
     """
     return crud.get_person_month_ratio(db)
 
@@ -283,8 +283,8 @@ def get_person_month_ratio(db: Session = Depends(get_db)):
 def export_person_month_march(db: Session = Depends(get_db)):
     """
     人月行军图：每项目每员工每月项目工时、人月占比、当月总工时。
-    Close + 在职；当月总工时 = 项目 + 非项目 Management/Others/Training；
-    项目格仅 Project。月份按 work_weeks 区间归属 work_month，否则自然月。
+    Close + 在职；当月总工时 = 项目 + 非项目 Management/Others/Training；项目格仅 Project。
+    月份口径（统一标准）：周结束日在次月的，周整体归属次月；同月周不变。
     """
     return crud.get_person_month_march(db)
 
@@ -292,7 +292,7 @@ def export_person_month_march(db: Session = Depends(get_db)):
 @app.get("/export-employee-monthly-total")
 def export_employee_monthly_total(db: Session = Depends(get_db)):
     """
-    每人每月总工时：每位员工各月上述分母口径工时总和（项目 + M/O/T 非项目）。
-    Close + 在职。月份按 work_weeks 归属，否则自然月。
+    每人每月总工时：每位员工各月分母口径工时总和（项目 + M/O/T 非项目）。
+    Close + 在职。月份口径（统一标准）：周结束日在次月的，周整体归属次月；同月周不变。
     """
     return crud.get_employee_monthly_total(db)

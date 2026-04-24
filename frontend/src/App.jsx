@@ -140,6 +140,7 @@ const App = () => {
           {activeTab === 'approval' && (
             <ApprovalPanel
               approvalData={approvalData}
+              workWeeks={workWeeks}
               t={t}
               uiText={uiText}
               pageMeta={pageMeta}

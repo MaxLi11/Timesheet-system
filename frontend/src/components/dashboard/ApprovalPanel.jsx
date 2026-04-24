@@ -2,10 +2,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { ChevronDown, FileDown, CheckCircle2 } from 'lucide-react';
 import * as dataHelper from '../../utils/dataHelper';
+import { getEntryWorkMonth } from '../../utils/dataHelper';
 import { applyWorkbookStyle, saveWorkbook } from '../../utils/excelStyles';
 
 export const ApprovalPanel = ({
   approvalData,
+  workWeeks = [],
   t,
   pageMeta,
   uiText
@@ -18,19 +20,24 @@ export const ApprovalPanel = ({
 
   const approvalYears = useMemo(() => {
     const years = new Set();
-    approvalData.forEach(e => years.add(String(dayjs(e.start_date).year())));
+    approvalData.forEach(e => {
+      // 统一口径：年份也用工作周归属月的年份
+      const entryMonth = getEntryWorkMonth(e, workWeeks);
+      if (entryMonth) years.add(entryMonth.slice(0, 4));
+    });
     return [...years].sort();
-  }, [approvalData]);
+  }, [approvalData, workWeeks]);
 
   const approvalMonths = useMemo(() => {
     if (!approvalYear) return [];
     const months = new Set();
     approvalData.forEach(e => {
-      const d = dayjs(e.start_date);
-      if (String(d.year()) === approvalYear) months.add(d.format('YYYY-MM'));
+      // 统一口径：按工作周归属月（升天兆 work_month，否则 end_date 所在月）
+      const entryMonth = getEntryWorkMonth(e, workWeeks);
+      if (entryMonth.slice(0, 4) === approvalYear) months.add(entryMonth);
     });
     return [...months].sort();
-  }, [approvalData, approvalYear]);
+  }, [approvalData, approvalYear, workWeeks]);
 
   // Auto-select latest year for approval
   useEffect(() => {
