@@ -3,6 +3,61 @@ import { ChevronDown, ChevronRight, FileDown, CheckCircle2 } from 'lucide-react'
 import * as dataHelper from '../../utils/dataHelper';
 import { applyWorkbookStyle, saveWorkbook } from '../../utils/excelStyles';
 
+const PeriodFilter = ({
+  year, month, week,
+  onYearChange, onMonthChange, onWeekChange,
+  periodOptions, workWeeks, t,
+  style = {}
+}) => (
+  <div className="reporting-filters" style={{ flexWrap: 'wrap', gap: '0.5rem', ...style }}>
+    <div className="filter-group">
+      <label>{t.selectYear}</label>
+      <select value={year} onChange={e => onYearChange(e.target.value)}>
+        {periodOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
+      </select>
+    </div>
+
+    {year && (
+      <div className="filter-group">
+        <label>{t.selectMonth}</label>
+        <select value={month} onChange={e => onMonthChange(e.target.value)}>
+          <option value="">{t.allMonths}</option>
+          {(periodOptions.monthsByYear[year] || []).map(m => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      </div>
+    )}
+
+    {month && (
+      <div className="filter-group">
+        <label>{t.selectWeek}</label>
+        <select
+          value={week ? (week.week_code || week.week || week) : ''}
+          onChange={e => {
+            const code = e.target.value;
+            if (!code) { onWeekChange(null); return; }
+            const ww = workWeeks.find(w => w.week_code === code);
+            onWeekChange(ww || { week: code, isIso: true });
+          }}
+        >
+          <option value="">{t.allWeeks}</option>
+          {workWeeks.length > 0
+            ? workWeeks
+                .filter(w => w.work_month === `${year}-${month}`)
+                .map(w => (
+                  <option key={w.week_code} value={w.week_code}>{w.week_code}</option>
+                ))
+            : (periodOptions.weeksByMonth[`${year}-${month}`] || []).map(w => (
+                <option key={w.week} value={w.week}>{w.label}</option>
+              ))
+          }
+        </select>
+      </div>
+    )}
+  </div>
+);
+
 export const ReportingPanel = ({
   reportingData,
   activeEmployees,
@@ -43,8 +98,8 @@ export const ReportingPanel = ({
   const handleCompletenessMonthChange = (m) => { setCompletenessMonth(m); setCompletenessWeek(null); };
 
   const reportingRecords = useMemo(() =>
-    dataHelper.computeReportingRate(reportingData, filterYear, filterMonth, filterWeek, Number(targetHours)),
-    [reportingData, filterYear, filterMonth, filterWeek, targetHours]
+    dataHelper.computeReportingRate(reportingData, filterYear, filterMonth, filterWeek, Number(targetHours), workWeeks),
+    [reportingData, filterYear, filterMonth, filterWeek, targetHours, workWeeks]
   );
 
   const reportingByDept = useMemo(() =>
@@ -53,8 +108,8 @@ export const ReportingPanel = ({
   );
 
   const reportingCompleteness = useMemo(
-    () => dataHelper.computeReportingCompleteness(reportingData, activeEmployees, completenessYear, completenessMonth, completenessWeek),
-    [reportingData, activeEmployees, completenessYear, completenessMonth, completenessWeek]
+    () => dataHelper.computeReportingCompleteness(reportingData, activeEmployees, completenessYear, completenessMonth, completenessWeek, workWeeks),
+    [reportingData, activeEmployees, completenessYear, completenessMonth, completenessWeek, workWeeks]
   );
 
   const toggleDept = (dept) => {
@@ -75,6 +130,25 @@ export const ReportingPanel = ({
     applyWorkbookStyle(wb);
     const periodLabel = (filterWeek && filterWeek.week_code) || filterMonth || filterYear || 'all';
     await saveWorkbook(wb, `完整填报率_${periodLabel}_target${targetHours}h.xlsx`);
+  };
+
+  const exportMissingExcel = async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(lang === 'zh' ? '漏填名单' : 'Missing');
+    const empMap = {};
+    (activeEmployees || []).forEach(e => { empMap[(e.employee_name || '').trim()] = e.team_leader || ''; });
+    ws.addRow([lang === 'zh' ? '部门简称' : 'Department', 'Team Leader', lang === 'zh' ? '员工姓名' : 'Employee Name']);
+    (reportingCompleteness.missing_employees || []).forEach(name => {
+      ws.addRow([
+        Object.entries(reportingCompleteness.missing_by_dept || {}).find(([, names]) => names.includes(name))?.[0] || '',
+        empMap[name] || '',
+        name,
+      ]);
+    });
+    applyWorkbookStyle(wb);
+    const periodLabel = (completenessWeek && completenessWeek.week_code) || completenessMonth || completenessYear || 'all';
+    await saveWorkbook(wb, `${lang === 'zh' ? '漏填名单' : 'missing_employees'}_${periodLabel}.xlsx`);
   };
 
   const pageHighlights = useMemo(() => [
@@ -109,53 +183,12 @@ export const ReportingPanel = ({
 
       <div className="reporting-tab section-shell">
         <div className="reporting-top-bar">
-          <div className="reporting-filters">
-            <div className="filter-group">
-              <label>{t.selectYear}</label>
-              <select value={filterYear} onChange={e => handleYearChange(e.target.value)}>
-                {periodOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-
-            {filterYear && (
-              <div className="filter-group">
-                <label>{t.selectMonth}</label>
-                <select value={filterMonth} onChange={e => handleMonthChange(e.target.value)}>
-                  <option value="">{t.allMonths}</option>
-                  {(periodOptions.monthsByYear[filterYear] || []).map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {filterMonth && (
-              <div className="filter-group">
-                <label>{t.selectWeek}</label>
-                <select
-                  value={filterWeek ? (filterWeek.week_code || filterWeek.week || filterWeek) : ''}
-                  onChange={e => {
-                    const code = e.target.value;
-                    if (!code) { setFilterWeek(null); return; }
-                    const ww = workWeeks.find(w => w.week_code === code);
-                    setFilterWeek(ww || { week: code, isIso: true });
-                  }}
-                >
-                  <option value="">{t.allWeeks}</option>
-                  {workWeeks.length > 0
-                    ? workWeeks
-                        .filter(w => w.work_month === `${filterYear}-${filterMonth}`)
-                        .map(w => (
-                          <option key={w.week_code} value={w.week_code}>{w.week_code}</option>
-                        ))
-                    : (periodOptions.weeksByMonth[`${filterYear}-${filterMonth}`] || []).map(w => (
-                        <option key={w.week} value={w.week}>{w.label}</option>
-                      ))
-                  }
-                </select>
-              </div>
-            )}
-          </div>
+          <PeriodFilter
+            year={filterYear} month={filterMonth} week={filterWeek}
+            onYearChange={handleYearChange} onMonthChange={handleMonthChange} onWeekChange={setFilterWeek}
+            periodOptions={periodOptions} workWeeks={workWeeks} t={t}
+            style={{ marginBottom: 0 }}
+          />
 
           <div className="reporting-actions">
             <div className="target-input">
@@ -242,76 +275,17 @@ export const ReportingPanel = ({
               </h3>
               <p className="module-caption" style={{ marginTop: '6px' }}>{t.completenessMethodBDesc}</p>
             </div>
-            <button
-              className="export-btn"
-              onClick={async () => {
-                const ExcelJS = (await import('exceljs')).default;
-                const wb = new ExcelJS.Workbook();
-                const ws = wb.addWorksheet(lang === 'zh' ? '漏填名单' : 'Missing');
-                const empMap = {};
-                (activeEmployees || []).forEach(e => { empMap[(e.employee_name || '').trim()] = e.team_leader || ''; });
-                ws.addRow([lang === 'zh' ? '部门简称' : 'Department', 'Team Leader', lang === 'zh' ? '员工姓名' : 'Employee Name']);
-                (reportingCompleteness.missing_employees || []).forEach(name => {
-                  ws.addRow([
-                    Object.entries(reportingCompleteness.missing_by_dept || {}).find(([, names]) => names.includes(name))?.[0] || '',
-                    empMap[name] || '',
-                    name,
-                  ]);
-                });
-                applyWorkbookStyle(wb);
-                const periodLabel = (completenessWeek && completenessWeek.week_code) || completenessMonth || completenessYear || 'all';
-                await saveWorkbook(wb, `${lang === 'zh' ? '漏填名单' : 'missing_employees'}_${periodLabel}.xlsx`);
-              }}
-            >
+            <button className="export-btn" onClick={exportMissingExcel}>
               <FileDown size={16} /> {lang === 'zh' ? '导出 Excel' : 'Export Excel'}
             </button>
           </div>
 
-          <div className="reporting-filters" style={{ marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div className="filter-group">
-              <label>{t.selectYear}</label>
-              <select value={completenessYear} onChange={e => handleCompletenessYearChange(e.target.value)}>
-                {periodOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-            {completenessYear && (
-              <div className="filter-group">
-                <label>{t.selectMonth}</label>
-                <select value={completenessMonth} onChange={e => handleCompletenessMonthChange(e.target.value)}>
-                  <option value="">{t.allMonths}</option>
-                  {(periodOptions.monthsByYear[completenessYear] || []).map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {completenessMonth && (
-              <div className="filter-group">
-                <label>{t.selectWeek}</label>
-                <select
-                  value={completenessWeek ? (completenessWeek.week_code || completenessWeek.week || completenessWeek) : ''}
-                  onChange={e => {
-                    const code = e.target.value;
-                    if (!code) { setCompletenessWeek(null); return; }
-                    const ww = workWeeks.find(w => w.week_code === code);
-                    setCompletenessWeek(ww || { week: code, isIso: true });
-                  }}
-                >
-                  <option value="">{t.allWeeks}</option>
-                  {workWeeks.length > 0
-                    ? workWeeks
-                        .filter(w => w.work_month === `${completenessYear}-${completenessMonth}`)
-                        .map(w => (
-                          <option key={w.week_code} value={w.week_code}>{w.week_code}</option>
-                        ))
-                    : (periodOptions.weeksByMonth[`${completenessYear}-${completenessMonth}`] || []).map(w => (
-                        <option key={w.week} value={w.week}>{w.label}</option>
-                      ))
-                  }
-                </select>
-              </div>
-            )}
-          </div>
+          <PeriodFilter
+            year={completenessYear} month={completenessMonth} week={completenessWeek}
+            onYearChange={handleCompletenessYearChange} onMonthChange={handleCompletenessMonthChange} onWeekChange={setCompletenessWeek}
+            periodOptions={periodOptions} workWeeks={workWeeks} t={t}
+            style={{ marginBottom: '0.75rem' }}
+          />
 
           {reportingCompleteness.no_filter ? (
             <div className="card no-issues table-card">{lang === 'zh' ? '请先选择年份和月份/周次，查看对应漏填人员' : 'Please select a year and month/week to view missing submissions'}</div>
