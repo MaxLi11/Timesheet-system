@@ -37,3 +37,7 @@ timesheet.db
 # Unnecessary docs
 docs/logo-redesign-notes.md
 docs/superpowers-workflow.md
+
+*.xlsx
+!backend/data/work_weeks_preset.xlsx
+*.db
