@@ -45,6 +45,7 @@ class TimeEntry(Base):
     department = Column(String, index=True)
     department_full = Column(String)
     position = Column(String)
+    bu = Column(String)
     project_name = Column(String, index=True)
     category = Column(String)
     start_date = Column(Date)
@@ -128,6 +129,7 @@ def _backfill_time_entry_columns():
         "department_full": "VARCHAR",
         "position": "VARCHAR",
         "employee_status": "VARCHAR",
+        "bu": "VARCHAR",
     }
 
     with engine.begin() as connection:

@@ -94,6 +94,7 @@ async def upload_timesheet(file: UploadFile = File(...), db: Session = Depends(g
         if not entries:
             raise HTTPException(status_code=400, detail="No valid data found in the Excel file.")
         employee_profiles = parsed.get("employee_profiles", [])
+        audit = parsed.get("audit", {})
 
         previous_employee_names = crud.get_distinct_employee_names_in_time_entries(db)
         count = crud.save_time_entries(db, entries)
@@ -118,6 +119,7 @@ async def upload_timesheet(file: UploadFile = File(...), db: Session = Depends(g
             "employees_processed": employee_count,
             "vanished_count": len(vanished),
             "vanished_employees": vanished,
+            "audit": audit,
         }
     except Exception as e:
         # This block already exists for general exceptions during parsing/saving

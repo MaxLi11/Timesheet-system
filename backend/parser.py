@@ -75,6 +75,40 @@ TIMESHEET_COLUMN_ALIASES = {
     "鏈搷浣滆€?": "未操作者",
 }
 
+CONFIRMED_EMPLOYEE_ALIASES = {
+    "薛亮/Liang Xue": "Liang Xue",
+    "李宪/Xian Li": "Xian Li",
+    "Mincheol Kim": "MIN CHEOL KIM/Rick",
+    "Bob (Pushui) Xu": "Pushui Xu",
+    "侯中原/Zhongyuan Hou": "侯中原",
+    "彭金龙/Dragon Peng": "彭金龙/Jinlong Peng",
+    "Guanting Chen": "Ting Chen",
+}
+
+PROJECT_ALIAS_OVERRIDES = {
+    "Evergreen": "Chico Creek",
+    "clinq": "Cape Cod",
+    "blinq": "Cape Cod",
+    "linq": "Cape Cod",
+    "Cape code": "Cape Cod",
+    "Cape Code": "Cape Cod",
+    "Oliver": "Olive",
+    "Cisco": "Nantucket",
+    "Tulkun": "Tulkun&Roc",
+    "Roc": "Tulkun&Roc",
+    "Catalina-BA": "Catalina",
+    "Catalina-S": "Catalina",
+    "Catalina/Coronado": "Catalina",
+    "Barolo-3": "Barolo3",
+    "Colorado-3": "Colorado3",
+    "KGD(MHD)": "KGD",
+}
+
+MANUAL_PROJECT_BU = {
+    "IP": "SCD",
+    "DP20 RX Link": "SCD",
+}
+
 
 def load_dept_mapping():
     global _DEPT_MAPPING_CACHE, _LAST_MAPPING_MTIME
@@ -109,6 +143,8 @@ def parse_timesheet(file_path: str, include_metadata: bool = False):
 
         # 步骤1：读取项目别名映射（表3）
         project_alias_mapping = _extract_project_alias_mapping(workbook)
+        project_standards = _extract_project_standards(workbook)
+        audit = _new_upload_audit()
 
         # 步骤2：读取员工信息（表4）和部门映射（表5）
         employee_profiles = _extract_employee_profiles(workbook)
@@ -157,13 +193,19 @@ def parse_timesheet(file_path: str, include_metadata: bool = False):
             dept_arr     = _vcol('所属部门')
             emp_id_arr   = _vcol('工号')
             pos_arr      = _vcol('职位')
-            task_arr     = _vcol('任务详情')
+            task_project_arr = _vcol('任务详情_项目')
+            if not task_project_arr.any():
+                task_project_arr = _vcol('任务详情')
+            task_non_project_arr = _vcol('任务详情_非项目')
+            if not task_non_project_arr.any():
+                task_non_project_arr = _vcol('任务详情.1')
             approval_arr = _vcol('核准状态')
             node_arr     = _vcol('当前节点')
             approver_arr = _vcol('未操作者')
             proj_new_arr = _vcol('项目名称(新)')
             proj_old_arr = _vcol('项目名称(作废)')
             non_proj_arr = _vcol('非项目名称')
+            bu_arr       = _vcol('BU')
 
             def _vnum(col):
                 if col not in df.columns:
@@ -185,33 +227,51 @@ def parse_timesheet(file_path: str, include_metadata: bool = False):
 
             # ── 主循环：仅做数组索引，无 Series 构建开销 ─────────────────────
             for i in range(n):
-                employee_name = emp_arr[i]
-                if not employee_name:
+                raw_employee_name = emp_arr[i]
+                if not raw_employee_name:
                     continue
+                employee_name, profile = _resolve_employee_profile(
+                    raw_employee_name,
+                    employee_lookup,
+                    audit,
+                )
 
                 # 解析 category / project_name / hours
                 pnew = proj_new_arr[i]
                 if pnew:
                     category     = 'Project'
-                    project_name = alias_lower.get(pnew.lower(), pnew)
+                    project_name = pnew
                     hours_raw    = hours_proj_arr[i]
+                    task_details = task_project_arr[i]
                 else:
                     pold = proj_old_arr[i]
                     if pold:
                         category     = 'Project'
-                        project_name = alias_lower.get(pold.lower(), pold)
+                        project_name = pold
                         hours_raw    = hours_proj_arr[i]
+                        task_details = task_project_arr[i]
                     else:
                         np_name = non_proj_arr[i]
                         if np_name:
                             category     = 'Non-Project'
                             project_name = np_name
                             hours_raw    = hours_non_proj_arr[i]
+                            task_details = task_non_project_arr[i]
                         else:
                             continue
 
                 if not project_name:
                     continue
+
+                entry_bu = ""
+                if category == "Project":
+                    project_name, entry_bu = _resolve_project_name_and_bu(
+                        project_name,
+                        bu_arr[i],
+                        project_standards,
+                        alias_lower,
+                        audit,
+                    )
 
                 # NaN 检查（pd.to_numeric 结果为 float64，nan != nan）
                 if hours_raw != hours_raw or hours_raw == 0:
@@ -222,22 +282,21 @@ def parse_timesheet(file_path: str, include_metadata: bool = False):
                 if start_date is None or end_date is None:
                     continue
 
-                profile            = employee_lookup.get(employee_name, {})
                 profile_department = profile.get('department_full') or ''
                 profile_position   = profile.get('position') or ''
                 profile_status     = profile.get('employee_status') or ''
 
-                raw_department = dept_arr[i] or profile_department
+                raw_department = profile_department or dept_arr[i]
 
                 if is_supplemental:
-                    month_key = start_date.strftime('%Y-%m')
+                    month_key = end_date.strftime('%Y-%m')
                     merge_key = (employee_name, project_name, category, month_key)
                     if merge_key in entries_map:
                         entries_map[merge_key]['hours'] += float(hours_raw)
                         continue
-                    last_day  = calendar.monthrange(start_date.year, start_date.month)[1]
-                    s_start   = date_cls(start_date.year, start_date.month, 1)
-                    s_end     = date_cls(start_date.year, start_date.month, last_day)
+                    last_day  = calendar.monthrange(end_date.year, end_date.month)[1]
+                    s_start   = date_cls(end_date.year, end_date.month, 1)
+                    s_end     = date_cls(end_date.year, end_date.month, last_day)
                 else:
                     merge_key = (employee_name, project_name, category, start_date, end_date, len(entries_map))
                     s_start   = start_date
@@ -245,17 +304,18 @@ def parse_timesheet(file_path: str, include_metadata: bool = False):
 
                 entry = {
                     'employee_name':    employee_name,
-                    'employee_id':      emp_id_arr[i] or (profile.get('employee_id') or ''),
+                    'employee_id':      (profile.get('employee_id') or '') or emp_id_arr[i],
                     'employee_status':  profile_status,
                     'department':       _map_department_name(raw_department, dept_mapping),
                     'department_full':  profile_department or raw_department,
                     'position':         profile_position or pos_arr[i],
+                    'bu':               entry_bu,
                     'project_name':     project_name,
                     'category':         category,
                     'start_date':       s_start,
                     'end_date':         s_end,
                     'hours':            float(hours_raw),
-                    'task_details':     task_arr[i],
+                    'task_details':     task_details,
                     'approval_status':  approval_arr[i],
                     'current_node':     node_arr[i],
                     'pending_approver': approver_arr[i],
@@ -273,9 +333,10 @@ def parse_timesheet(file_path: str, include_metadata: bool = False):
             _parse_frame_rows(supplemental_df, is_supplemental=True)
 
         entries = list(entries_map.values())
+        _finalize_upload_audit(audit, entries)
 
         if include_metadata:
-            return {'entries': entries, 'employee_profiles': employee_profiles}
+            return {'entries': entries, 'employee_profiles': employee_profiles, 'audit': audit}
         return entries
     except Exception as exc:
         raise Exception(f'解析Excel失败: {exc}') from exc
@@ -284,6 +345,7 @@ def parse_timesheet(file_path: str, include_metadata: bool = False):
 def _normalize_timesheet_columns(columns):
     normalized_columns = []
     heji_count = 0
+    task_count = 0
 
     for column in columns:
         column_name = TIMESHEET_COLUMN_ALIASES.get(str(column).strip(), str(column).strip())
@@ -292,6 +354,11 @@ def _normalize_timesheet_columns(columns):
             heji_count += 1
         elif column_name == "合计.1":
             normalized_columns.append("合计_非项目")
+        elif column_name == "任务详情":
+            normalized_columns.append("任务详情_项目" if task_count == 0 else "任务详情_非项目")
+            task_count += 1
+        elif column_name == "任务详情.1":
+            normalized_columns.append("任务详情_非项目")
         else:
             normalized_columns.append(column_name)
 
@@ -329,6 +396,171 @@ def _clean_text(value):
     if value is None or pd.isna(value):
         return ""
     return str(value).strip()
+
+
+def _dedupe_append(items, item):
+    if item not in items:
+        items.append(item)
+
+
+def _normalize_project_key(value):
+    return re.sub(r"[^a-z0-9]+", "", _clean_text(value).lower())
+
+
+def _new_upload_audit():
+    return {
+        "rows_processed": 0,
+        "project_hours": 0.0,
+        "non_project_hours": 0.0,
+        "total_hours": 0.0,
+        "bu_overwrites": [],
+        "unmatched_employees": [],
+        "historical_exception_projects": [],
+        "unmatched_projects": [],
+        "blank_project_bu_rows": [],
+        "monthly_summary": {},
+    }
+
+
+def _resolve_employee_profile(raw_employee_name, employee_lookup, audit):
+    raw_name = _clean_text(raw_employee_name)
+    alias_name = CONFIRMED_EMPLOYEE_ALIASES.get(raw_name, raw_name)
+    profile = employee_lookup.get(alias_name) or employee_lookup.get(raw_name) or {}
+    if profile:
+        return profile.get("employee_name") or alias_name, profile
+
+    if employee_lookup:
+        _dedupe_append(audit["unmatched_employees"], raw_name)
+    return alias_name, {}
+
+
+def _extract_project_standards(workbook):
+    by_lower_name = {}
+    by_normalized = {}
+
+    for _, df in workbook.items():
+        if not isinstance(df, pd.DataFrame):
+            continue
+        cols = {str(c).strip() for c in df.columns}
+        if "Name" not in cols or "BU" not in cols:
+            continue
+
+        for _, row in df.iterrows():
+            name = _clean_text(row.get("Name"))
+            bu = _clean_text(row.get("BU"))
+            if not name:
+                continue
+            item = {"name": name, "bu": bu}
+            by_lower_name[name.lower()] = item
+            key = _normalize_project_key(name)
+            if key:
+                by_normalized.setdefault(key, []).append(item)
+
+    return {"by_lower_name": by_lower_name, "by_normalized": by_normalized}
+
+
+def _standard_project_match(project_name, project_standards):
+    name = _clean_text(project_name)
+    if not name:
+        return None
+
+    exact = project_standards.get("by_lower_name", {}).get(name.lower())
+    if exact:
+        return exact
+
+    normalized = _normalize_project_key(name)
+    candidates = project_standards.get("by_normalized", {}).get(normalized, [])
+    unique = {}
+    for candidate in candidates:
+        unique[(candidate["name"], candidate.get("bu", ""))] = candidate
+    if len(unique) == 1:
+        return next(iter(unique.values()))
+    return None
+
+
+def _resolve_project_name_and_bu(raw_project_name, raw_bu, project_standards, alias_lower, audit):
+    original_name = _clean_text(raw_project_name)
+    original_bu = _clean_text(raw_bu)
+    aliased_name = alias_lower.get(original_name.lower(), original_name)
+
+    standard = _standard_project_match(aliased_name, project_standards)
+    if standard:
+        project_name = standard["name"]
+        bu = standard.get("bu", "")
+        if original_bu and bu and original_bu != bu:
+            _dedupe_append(
+                audit["bu_overwrites"],
+                {"project_name": project_name, "from_bu": original_bu, "to_bu": bu},
+            )
+        if not bu:
+            _dedupe_append(
+                audit["blank_project_bu_rows"],
+                {"project_name": project_name, "source_project_name": original_name},
+            )
+        return project_name, bu
+
+    manual_bu = MANUAL_PROJECT_BU.get(aliased_name)
+    if manual_bu:
+        if original_bu and original_bu != manual_bu:
+            _dedupe_append(
+                audit["bu_overwrites"],
+                {"project_name": aliased_name, "from_bu": original_bu, "to_bu": manual_bu},
+            )
+        return aliased_name, manual_bu
+
+    if original_bu:
+        _dedupe_append(
+            audit["historical_exception_projects"],
+            {"project_name": aliased_name, "bu": original_bu},
+        )
+        return aliased_name, original_bu
+
+    _dedupe_append(audit["unmatched_projects"], aliased_name)
+    _dedupe_append(
+        audit["blank_project_bu_rows"],
+        {"project_name": aliased_name, "source_project_name": original_name},
+    )
+    return aliased_name, ""
+
+
+def _finalize_upload_audit(audit, entries):
+    audit["rows_processed"] = len(entries)
+    monthly = {}
+    project_hours = 0.0
+    non_project_hours = 0.0
+
+    for entry in entries:
+        hours = float(entry.get("hours") or 0)
+        category = entry.get("category") or ""
+        if category == "Project":
+            project_hours += hours
+        elif category == "Non-Project":
+            non_project_hours += hours
+
+        end_date = entry.get("end_date")
+        if end_date:
+            month_key = end_date.strftime("%Y-%m")
+            bucket = monthly.setdefault(
+                month_key,
+                {"project_hours": 0.0, "non_project_hours": 0.0, "total_hours": 0.0},
+            )
+            if category == "Project":
+                bucket["project_hours"] += hours
+            elif category == "Non-Project":
+                bucket["non_project_hours"] += hours
+            bucket["total_hours"] += hours
+
+    audit["project_hours"] = round(project_hours, 3)
+    audit["non_project_hours"] = round(non_project_hours, 3)
+    audit["total_hours"] = round(project_hours + non_project_hours, 3)
+    audit["monthly_summary"] = {
+        month: {
+            "project_hours": round(values["project_hours"], 3),
+            "non_project_hours": round(values["non_project_hours"], 3),
+            "total_hours": round(values["total_hours"], 3),
+        }
+        for month, values in sorted(monthly.items())
+    }
 
 
 def _map_department_name(raw_department, dept_mapping):
@@ -371,7 +603,10 @@ def _is_timesheet_frame(df: pd.DataFrame):
 
 
 def _extract_project_alias_mapping(workbook):
-    alias_mapping = {}
+    alias_mapping = {
+        source.lower(): target
+        for source, target in PROJECT_ALIAS_OVERRIDES.items()
+    }
     for _, df in workbook.items():
         if not isinstance(df, pd.DataFrame) or df.shape[1] < 2:
             continue
