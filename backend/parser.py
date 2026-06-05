@@ -1,9 +1,11 @@
 import os
 import re
 import calendar
+import zipfile
 import numpy as np
 from datetime import date, datetime, date as date_cls
 from pathlib import Path
+from xml.etree.ElementTree import iterparse
 
 import pandas as pd
 
@@ -57,6 +59,10 @@ PROJECT_SCHEDULE_MILESTONES = [
     "CS",
     "RTP",
 ]
+
+XLSX_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+REL_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+PACKAGE_REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 
 TIMESHEET_COLUMN_ALIASES = {
     "鍛樺伐": "员工",
@@ -137,7 +143,7 @@ def load_dept_mapping():
 
 def parse_timesheet(file_path: str, include_metadata: bool = False):
     try:
-        workbook = pd.read_excel(file_path, sheet_name=None)
+        workbook = _read_excel_workbook(file_path)
         if not isinstance(workbook, dict):
             workbook = {"Sheet0": workbook}
 
@@ -340,6 +346,120 @@ def parse_timesheet(file_path: str, include_metadata: bool = False):
         return entries
     except Exception as exc:
         raise Exception(f'解析Excel失败: {exc}') from exc
+
+
+def _read_excel_workbook(file_path: str):
+    if not str(file_path).lower().endswith(".xlsx"):
+        return pd.read_excel(file_path, sheet_name=None)
+
+    try:
+        return _read_xlsx_workbook_fast(file_path)
+    except Exception as exc:
+        print(f"Warning: fast xlsx reader failed, falling back to pandas: {exc}")
+        return pd.read_excel(file_path, sheet_name=None)
+
+
+def _read_xlsx_workbook_fast(file_path: str):
+    with zipfile.ZipFile(file_path) as zf:
+        shared_strings = _read_shared_strings(zf)
+        sheet_paths = _read_sheet_paths(zf)
+        workbook = {}
+        for sheet_name, sheet_path in sheet_paths:
+            workbook[sheet_name] = _read_sheet_dataframe(zf, sheet_path, shared_strings)
+        return workbook
+
+
+def _read_shared_strings(zf):
+    try:
+        source = zf.open("xl/sharedStrings.xml")
+    except KeyError:
+        return []
+
+    strings = []
+    with source:
+        for _, elem in iterparse(source, events=("end",)):
+            if elem.tag == XLSX_NS + "si":
+                strings.append("".join(t.text or "" for t in elem.iter(XLSX_NS + "t")))
+                elem.clear()
+    return strings
+
+
+def _read_sheet_paths(zf):
+    workbook_rels = {}
+    with zf.open("xl/_rels/workbook.xml.rels") as source:
+        for _, elem in iterparse(source, events=("end",)):
+            if elem.tag == PACKAGE_REL_NS + "Relationship":
+                target = elem.attrib.get("Target", "")
+                target_path = target.lstrip("/") if target.startswith("/") else "xl/" + target.lstrip("/")
+                workbook_rels[elem.attrib.get("Id")] = target_path
+                elem.clear()
+
+    sheets = []
+    with zf.open("xl/workbook.xml") as source:
+        for _, elem in iterparse(source, events=("end",)):
+            if elem.tag == XLSX_NS + "sheet":
+                rel_id = elem.attrib.get(REL_NS + "id")
+                sheet_path = workbook_rels.get(rel_id)
+                if sheet_path:
+                    sheets.append((elem.attrib.get("name", f"Sheet{len(sheets) + 1}"), sheet_path))
+                elem.clear()
+    return sheets
+
+
+def _read_sheet_dataframe(zf, sheet_path, shared_strings):
+    rows = []
+    with zf.open(sheet_path) as source:
+        for _, row_elem in iterparse(source, events=("end",)):
+            if row_elem.tag == XLSX_NS + "row":
+                row_values = []
+                for cell in row_elem.findall(XLSX_NS + "c"):
+                    col_idx = _cell_col_index(cell.attrib.get("r", ""))
+                    if col_idx is None:
+                        continue
+                    while len(row_values) <= col_idx:
+                        row_values.append("")
+                    row_values[col_idx] = _cell_value(cell, shared_strings)
+                rows.append(row_values)
+                row_elem.clear()
+
+    if not rows:
+        return pd.DataFrame()
+
+    headers = [str(value).strip() for value in rows[0]]
+    width = len(headers)
+    normalized_rows = []
+    for row in rows[1:]:
+        if len(row) < width:
+            row = row + [""] * (width - len(row))
+        normalized_rows.append(row[:width])
+    return pd.DataFrame(normalized_rows, columns=headers)
+
+
+def _cell_col_index(cell_ref):
+    match = re.match(r"([A-Z]+)", cell_ref or "")
+    if not match:
+        return None
+    idx = 0
+    for char in match.group(1):
+        idx = idx * 26 + ord(char) - ord("A") + 1
+    return idx - 1
+
+
+def _cell_value(cell, shared_strings):
+    cell_type = cell.attrib.get("t")
+    if cell_type == "inlineStr":
+        return "".join(text.text or "" for text in cell.iter(XLSX_NS + "t"))
+
+    value = cell.find(XLSX_NS + "v")
+    if value is None:
+        return ""
+
+    text = value.text or ""
+    if cell_type == "s" and text:
+        return shared_strings[int(text)]
+    if cell_type == "b":
+        return text == "1"
+    return text
 
 
 def _normalize_timesheet_columns(columns):
