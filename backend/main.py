@@ -1,37 +1,19 @@
+from contextlib import asynccontextmanager
+import os
+import shutil
+import traceback
+
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from . import database, parser, crud
-import shutil
-import os
-import traceback
-
-app = FastAPI(title="Timesheet Analysis API")
-
-# Enable CORS for frontend development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
-
-@app.get("/ping")
-def ping():
-    return {"status": "pong"}
-
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
 
 # Preset work-week file bundled with the backend
 _PRESET_WORK_WEEK_PATH = os.path.join(os.path.dirname(__file__), "data", "work_weeks_preset.xlsx")
 
-# Initialize database
-@app.on_event("startup")
-async def startup_event():
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     print("Starting up... Initializing database...")
     try:
         database.init_db()
@@ -58,6 +40,28 @@ async def startup_event():
             print(f"work_weeks already has {count} rows, skipping preset seed.")
     finally:
         db.close()
+    yield
+
+
+app = FastAPI(title="Timesheet Analysis API", lifespan=lifespan)
+
+# Enable CORS for frontend development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
+@app.get("/ping")
+def ping():
+    return {"status": "pong"}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
 # Dependency for DB session
 def get_db():

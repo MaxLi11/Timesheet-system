@@ -10,21 +10,23 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    chunkSizeWarningLimit: 600,
+    // ExcelJS is lazy-loaded only from export actions, and ECharts is isolated here as
+    // a chart vendor chunk. Keep the limit just above those known bundles so new
+    // accidental chunks still warn without making the current split noisy.
+    chunkSizeWarningLimit: 1150,
     rollupOptions: {
       output: {
         manualChunks: {
-          // React core — tiny, but good to isolate
+          // React core is tiny, but good to isolate.
           'vendor-react': ['react', 'react-dom'],
-          // ECharts is the largest dependency (~600KB min+gz)
+          // Charting library.
           'vendor-echarts': ['echarts', 'echarts-for-react'],
-          // Icon library
+          // Icon library.
           'vendor-icons': ['lucide-react'],
-          // Date utility
+          // Date utility.
           'vendor-dayjs': ['dayjs'],
         },
       },
     },
   },
 })
-

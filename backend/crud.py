@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -106,7 +106,7 @@ def compute_vanished_after_upload(previous_names: set, new_entries: list, active
 def save_vanished_after_upload(db: Session, names: list):
     payload = json.dumps({"names": names}, ensure_ascii=False)
     row = db.query(database.AppState).filter(database.AppState.key == UPLOAD_VANISHED_KEY).first()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if row:
         row.value_json = payload
         row.updated_at = now
@@ -130,8 +130,14 @@ def get_vanished_after_upload(db: Session):
     except json.JSONDecodeError:
         return {"names": [], "updated_at": None}
     names = data.get("names") or []
-    updated = row.updated_at.isoformat() + "Z" if row.updated_at else None
+    updated = _format_utc_timestamp(row.updated_at) if row.updated_at else None
     return {"names": names, "updated_at": updated}
+
+
+def _format_utc_timestamp(value: datetime):
+    if value.tzinfo:
+        value = value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value.isoformat() + "Z"
 
 
 def save_employee_profiles(db: Session, profiles: list):
