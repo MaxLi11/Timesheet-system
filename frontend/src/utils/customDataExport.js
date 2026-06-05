@@ -14,7 +14,7 @@ export const resolveWorkMonthKey = (dateStr, workWeeks = []) => {
   }
   return d.format("YYYY-MM");
 };
-const BASE_HEADERS = ["项目", "员工", "所属部门", "部门简称", "职位"];
+const BASE_HEADERS = ["BU", "项目", "员工", "部门简称", "所属部门", "职位"];
 const SHEET_NAME = "每项目工时";
 
 const compareText = (left, right) => String(left || "").localeCompare(String(right || ""));
@@ -96,12 +96,16 @@ export const buildCustomProjectHoursExport = (entries = [], workWeeks = [], now 
     const existingGroup = groups.get(groupKey) || {
       project_name: String(entry.project_name || "").trim(),
       employee_name: String(entry.employee_name || "").trim(),
+      bu: String(entry.bu || "").trim(),
       department_full: String(entry.department_full || "").trim(),
       department: String(entry.department || "").trim(),
       position: String(entry.position || "").trim(),
       monthHours: new Map(),
     };
 
+    if (!existingGroup.bu && entry.bu) {
+      existingGroup.bu = String(entry.bu).trim();
+    }
     if (!existingGroup.department_full && entry.department_full) {
       existingGroup.department_full = String(entry.department_full).trim();
     }
@@ -134,10 +138,11 @@ export const buildCustomProjectHoursExport = (entries = [], workWeeks = [], now 
       [...group.monthHours.values()].reduce((sum, value) => sum + Number(value || 0), 0)
     );
     return [
+      group.bu,
       group.project_name,
       group.employee_name,
-      group.department_full,
       group.department,
+      group.department_full,
       group.position,
       ...monthValues,
       totalHours,

@@ -47,8 +47,8 @@ export const CustomDataPanel = ({
       const ExcelJS = (await import('exceljs')).default;
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('人月占比');
-      ws.addRow(['项目名称', '员工', '所属部门', '部门简称', '职位', ...months]);
-      rows.forEach(r => ws.addRow([r.project_name, r.employee_name, r.department_full, r.department, r.position, ...months.map(m => r.months[m] ?? 0)]));
+      ws.addRow(['BU', '项目名称', '员工', '部门简称', '所属部门', '职位', ...months]);
+      rows.forEach(r => ws.addRow([r.bu || '', r.project_name, r.employee_name, r.department, r.department_full, r.position, ...months.map(m => r.months[m] ?? 0)]));
       applyWorkbookStyle(wb);
       const now = new Date(); const pad = v => String(v).padStart(2, '0');
       await saveWorkbook(wb, `人月占比_Close口径_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}.xlsx`);
@@ -64,20 +64,20 @@ export const CustomDataPanel = ({
       const ExcelJS = (await import('exceljs')).default;
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet(lang === 'zh' ? '人月行军图' : 'March Chart');
-      const baseH = [lang==='zh'?'项目名称':'Project', lang==='zh'?'员工':'Employee', lang==='zh'?'所属部门':'Department', lang==='zh'?'部门简称':'Dept', lang==='zh'?'职位':'Position'];
+      const baseH = ['BU', lang==='zh'?'项目名称':'Project', lang==='zh'?'员工':'Employee', lang==='zh'?'部门简称':'Dept', lang==='zh'?'所属部门':'Department', lang==='zh'?'职位':'Position'];
       const subCol = lang==='zh' ? ['该项目该员工总工时','人月','当月总工时'] : ['Proj Hours','Ratio','Monthly Total'];
       const totalCol = lang==='zh' ? ['总计','总计','总计'] : ['Total','Total','Total'];
       // Row1: summary
-      ws.addRow(['','','','','', ...months.flatMap(m => [summary[m]?.proj_hours??'', summary[m]?.ratio??'', summary[m]?.total_hours??'']), '','','']);
+      ws.addRow(['','','','','','', ...months.flatMap(m => [summary[m]?.proj_hours??'', summary[m]?.ratio??'', summary[m]?.total_hours??'']), '','','']);
       // Row2: month headers
       ws.addRow([...baseH, ...months.flatMap(m => [m,m,m]), ...totalCol]);
       // Row3: sub-headers
-      ws.addRow(['','','','','', ...months.flatMap(()=>subCol), ...subCol]);
+      ws.addRow(['','','','','','', ...months.flatMap(()=>subCol), ...subCol]);
       rows.forEach(r => {
         const totProjH = Object.values(r.months).reduce((s,d)=>s+d.proj_hours,0);
         const totRatio = Object.values(r.months).reduce((s,d)=>s+d.ratio,0);
         const totTotalH = Object.values(r.months).reduce((s,d)=>s+d.total_hours,0);
-        ws.addRow([r.project_name, r.employee_name, r.department_full, r.department, r.position,
+        ws.addRow([r.bu || '', r.project_name, r.employee_name, r.department, r.department_full, r.position,
           ...months.flatMap(m => { const d=r.months[m]; return d?[d.proj_hours,d.ratio,d.total_hours]:['','','']; }),
           parseFloat(totProjH.toFixed(2)), parseFloat(totRatio.toFixed(6)), parseFloat(totTotalH.toFixed(2))]);
       });

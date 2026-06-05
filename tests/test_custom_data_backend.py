@@ -133,6 +133,141 @@ class CustomDataBackendTests(unittest.TestCase):
         self.assertEqual(payload[0]["department_full"], "130 R&D - Engineering Support (Suzhou)")
         self.assertEqual(payload[0]["position"], "Testing Engineer")
 
+    def test_person_month_exports_include_bu_and_department_fields(self):
+        db = database.SessionLocal()
+        try:
+            crud.save_work_weeks(
+                db,
+                [
+                    {
+                        "week_start": date(2025, 1, 6),
+                        "week_end": date(2025, 1, 10),
+                        "week_code": "202501-W2",
+                        "work_month": "2025-01",
+                    }
+                ],
+            )
+            crud.save_time_entries(
+                db,
+                [
+                    {
+                        "employee_name": "Alice",
+                        "employee_id": "E001",
+                        "employee_status": "",
+                        "department": "AE",
+                        "department_full": "130 R&D - Engineering Support (Suzhou)",
+                        "position": "Testing Engineer",
+                        "bu": "SCD",
+                        "project_name": "Alpha",
+                        "category": "Project",
+                        "start_date": date(2025, 1, 10),
+                        "end_date": date(2025, 1, 10),
+                        "hours": 8.0,
+                        "task_details": "bring-up",
+                        "approval_status": "Approved",
+                        "current_node": "Close",
+                        "pending_approver": "",
+                    }
+                ],
+            )
+        finally:
+            db.close()
+
+        ratio_payload = self.client.get("/person-month-ratio").json()
+        march_payload = self.client.get("/export-person-month-march").json()
+
+        self.assertEqual(ratio_payload["rows"][0]["bu"], "SCD")
+        self.assertEqual(ratio_payload["rows"][0]["department"], "AE")
+        self.assertEqual(ratio_payload["rows"][0]["department_full"], "130 R&D - Engineering Support (Suzhou)")
+        self.assertEqual(march_payload["rows"][0]["bu"], "SCD")
+        self.assertEqual(march_payload["rows"][0]["department"], "AE")
+        self.assertEqual(march_payload["rows"][0]["department_full"], "130 R&D - Engineering Support (Suzhou)")
+
+    def test_person_month_totals_include_all_close_non_project_hours(self):
+        db = database.SessionLocal()
+        try:
+            crud.save_work_weeks(
+                db,
+                [
+                    {
+                        "week_start": date(2025, 1, 6),
+                        "week_end": date(2025, 1, 10),
+                        "week_code": "202501-W2",
+                        "work_month": "2025-01",
+                    }
+                ],
+            )
+            crud.save_time_entries(
+                db,
+                [
+                    {
+                        "employee_name": "Alice",
+                        "employee_id": "E001",
+                        "employee_status": "",
+                        "department": "AE",
+                        "department_full": "130 R&D - Engineering Support (Suzhou)",
+                        "position": "Testing Engineer",
+                        "bu": "SCD",
+                        "project_name": "Alpha",
+                        "category": "Project",
+                        "start_date": date(2025, 1, 10),
+                        "end_date": date(2025, 1, 10),
+                        "hours": 8.0,
+                        "task_details": "project",
+                        "approval_status": "Approved",
+                        "current_node": "Close",
+                        "pending_approver": "",
+                    },
+                    {
+                        "employee_name": "Alice",
+                        "employee_id": "E001",
+                        "employee_status": "",
+                        "department": "AE",
+                        "department_full": "130 R&D - Engineering Support (Suzhou)",
+                        "position": "Testing Engineer",
+                        "bu": "",
+                        "project_name": "Time Off",
+                        "category": "Non-Project",
+                        "start_date": date(2025, 1, 10),
+                        "end_date": date(2025, 1, 10),
+                        "hours": 2.0,
+                        "task_details": "time off",
+                        "approval_status": "Approved",
+                        "current_node": "Close",
+                        "pending_approver": "",
+                    },
+                    {
+                        "employee_name": "Alice",
+                        "employee_id": "E001",
+                        "employee_status": "",
+                        "department": "AE",
+                        "department_full": "130 R&D - Engineering Support (Suzhou)",
+                        "position": "Testing Engineer",
+                        "bu": "",
+                        "project_name": "Public Holiday",
+                        "category": "Non-Project",
+                        "start_date": date(2025, 1, 10),
+                        "end_date": date(2025, 1, 10),
+                        "hours": 1.0,
+                        "task_details": "holiday",
+                        "approval_status": "Approved",
+                        "current_node": "Pending",
+                        "pending_approver": "",
+                    },
+                ],
+            )
+        finally:
+            db.close()
+
+        ratio_payload = self.client.get("/person-month-ratio").json()
+        march_payload = self.client.get("/export-person-month-march").json()
+        total_payload = self.client.get("/export-employee-monthly-total").json()
+
+        self.assertEqual(ratio_payload["rows"][0]["months"]["2025-01"], 0.8)
+        self.assertEqual(march_payload["rows"][0]["months"]["2025-01"]["proj_hours"], 8.0)
+        self.assertEqual(march_payload["rows"][0]["months"]["2025-01"]["total_hours"], 10.0)
+        self.assertEqual(total_payload["rows"][0]["months"]["2025-01"], 10.0)
+
     def test_init_db_backfills_new_time_entry_columns_on_existing_database(self):
         legacy_db_path = ROOT / "tests" / ".tmp_custom_data_legacy.db"
         if legacy_db_path.exists():

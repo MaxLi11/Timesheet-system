@@ -59,6 +59,7 @@ class CustomDataFrontendTests(unittest.TestCase):
                     "project_name": "Alpha",
                     "employee_name": "Zed",
                     "employee_id": "E002",
+                    "bu": "SCD",
                     "department": "AE",
                     "department_full": "Full AE",
                     "position": "Engineer",
@@ -70,6 +71,7 @@ class CustomDataFrontendTests(unittest.TestCase):
                     "project_name": "Alpha",
                     "employee_name": "Bob",
                     "employee_id": "E001",
+                    "bu": "DTD",
                     "department": "Digital",
                     "department_full": "Full Digital",
                     "position": "Designer",
@@ -81,6 +83,7 @@ class CustomDataFrontendTests(unittest.TestCase):
                     "project_name": "Alpha",
                     "employee_name": "Bob",
                     "employee_id": "E001",
+                    "bu": "DTD",
                     "department": "Digital",
                     "department_full": "Full Digital",
                     "position": "Designer",
@@ -92,6 +95,7 @@ class CustomDataFrontendTests(unittest.TestCase):
                     "project_name": "Alpha",
                     "employee_name": "Bob",
                     "employee_id": "E001",
+                    "bu": "DTD",
                     "department": "Digital",
                     "department_full": "Full Digital",
                     "position": "Designer",
@@ -103,6 +107,7 @@ class CustomDataFrontendTests(unittest.TestCase):
                     "project_name": "Beta",
                     "employee_name": "Amy",
                     "employee_id": "",
+                    "bu": "SCD",
                     "department": "Test",
                     "department_full": "Full Test",
                     "position": "Lead",
@@ -114,6 +119,7 @@ class CustomDataFrontendTests(unittest.TestCase):
                     "project_name": "Beta",
                     "employee_name": "Amy",
                     "employee_id": "",
+                    "bu": "SCD",
                     "department": "Test",
                     "department_full": "Full Test",
                     "position": "Lead",
@@ -126,13 +132,35 @@ class CustomDataFrontendTests(unittest.TestCase):
 
         self.assertEqual(
             result["headers"],
-            ["项目", "员工", "所属部门", "部门简称", "职位", "2025-01", "2025-02", "2025-03", "总计"],
+            ["BU", "项目", "员工", "部门简称", "所属部门", "职位", "2025-01", "2025-02", "2025-03", "总计"],
         )
-        self.assertEqual(result["rows"][0], ["Alpha", "Bob", "Full Digital", "Digital", "Designer", 2, None, 4, 6])
-        self.assertEqual(result["rows"][1], ["Alpha", "Zed", "Full AE", "AE", "Engineer", 5, None, None, 5])
-        self.assertEqual(result["rows"][2], ["Beta", "Amy", "Full Test", "Test", "Lead", None, 6, 3, 9])
+        self.assertEqual(result["rows"][0], ["DTD", "Alpha", "Bob", "Digital", "Full Digital", "Designer", 2, None, 4, 6])
+        self.assertEqual(result["rows"][1], ["SCD", "Alpha", "Zed", "AE", "Full AE", "Engineer", 5, None, None, 5])
+        self.assertEqual(result["rows"][2], ["SCD", "Beta", "Amy", "Test", "Full Test", "Lead", None, 6, 3, 9])
         self.assertEqual(result["sheetName"], "每项目工时")
         self.assertEqual(result["filename"], "每项目工时_Close口径_20260318_0915.xlsx")
+
+    def test_custom_export_places_bu_first_and_department_abbr_before_full_department(self):
+        result = self.run_export_helper(
+            [
+                {
+                    "project_name": "Alpha",
+                    "employee_name": "Bob",
+                    "employee_id": "E001",
+                    "bu": "SCD",
+                    "department": "Digital",
+                    "department_full": "110.1 R&D - Digital",
+                    "position": "Designer",
+                    "category": "Project",
+                    "current_node": "Close",
+                    "start_date": "2025-01-02",
+                    "hours": 2,
+                },
+            ]
+        )
+
+        self.assertEqual(result["headers"][:6], ["BU", "项目", "员工", "部门简称", "所属部门", "职位"])
+        self.assertEqual(result["rows"][0][:6], ["SCD", "Alpha", "Bob", "Digital", "110.1 R&D - Digital", "Designer"])
 
 
 if __name__ == "__main__":

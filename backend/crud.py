@@ -428,9 +428,6 @@ def save_work_weeks(db: Session, weeks: list):
 
 # ── 人月占比 / 行军图 / 每人每月总工时（共用口径）────────────────
 
-_NON_PROJECT_INCLUDE = {"management", "others", "training"}
-
-
 def _resolve_entry_work_month(start_date, end_date, work_week_rows: list) -> str:
     """
     按工作周划分表归属 work_month：start_date 落在某周的 [week_start, week_end] 内则取该周 work_month。
@@ -449,13 +446,8 @@ def _resolve_entry_work_month(start_date, end_date, work_week_rows: list) -> str
 
 
 def _entry_counts_toward_monthly_total(e) -> bool:
-    """Close 口径下行是否计入「员工当月总工时」分母（项目 + 非项目 M/O/T）。"""
-    if e.category == "Project":
-        return True
-    if e.category == "Non-Project":
-        proj = str(e.project_name or "").strip().lower()
-        return proj in _NON_PROJECT_INCLUDE
-    return False
+    """Close + active scope: monthly totals include project and all non-project hours."""
+    return e.category in {"Project", "Non-Project"}
 
 
 def _custom_export_base_entries(db: Session):
@@ -501,12 +493,15 @@ def get_person_month_ratio(db: Session):
 
         if e.employee_name not in employee_meta:
             employee_meta[e.employee_name] = {
+                "bu": e.bu or "",
                 "department_full": e.department_full or "",
                 "department": e.department or "",
                 "position": e.position or "",
             }
         else:
             meta = employee_meta[e.employee_name]
+            if not meta["bu"] and e.bu:
+                meta["bu"] = e.bu
             if not meta["department_full"] and e.department_full:
                 meta["department_full"] = e.department_full
             if not meta["department"] and e.department:
@@ -524,6 +519,7 @@ def get_person_month_ratio(db: Session):
         if row_key not in result_map:
             meta = employee_meta.get(employee, {})
             result_map[row_key] = {
+                "bu": meta.get("bu", ""),
                 "project_name": project,
                 "employee_name": employee,
                 "department_full": meta.get("department_full", ""),
@@ -573,10 +569,21 @@ def get_person_month_march(db: Session):
         proj_emp_month[key] = proj_emp_month.get(key, 0) + float(e.hours or 0)
         if e.employee_name not in emp_meta:
             emp_meta[e.employee_name] = {
+                "bu": e.bu or "",
                 "department_full": e.department_full or "",
                 "department": e.department or "",
                 "position": e.position or "",
             }
+        else:
+            meta = emp_meta[e.employee_name]
+            if not meta["bu"] and e.bu:
+                meta["bu"] = e.bu
+            if not meta["department_full"] and e.department_full:
+                meta["department_full"] = e.department_full
+            if not meta["department"] and e.department:
+                meta["department"] = e.department
+            if not meta["position"] and e.position:
+                meta["position"] = e.position
 
     month_from_projects = {m for (_, _, m) in proj_emp_month.keys()}
     month_from_totals = {m for (_, m) in emp_month_total.keys()}
@@ -590,6 +597,7 @@ def get_person_month_march(db: Session):
         if key not in row_map:
             meta = emp_meta.get(emp, {})
             row_map[key] = {
+                "bu": meta.get("bu", ""),
                 "project_name": proj,
                 "employee_name": emp,
                 "department_full": meta.get("department_full", ""),
