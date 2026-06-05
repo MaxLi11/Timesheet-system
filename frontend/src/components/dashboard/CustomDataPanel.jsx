@@ -47,8 +47,17 @@ export const CustomDataPanel = ({
       const ExcelJS = (await import('exceljs')).default;
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('人月占比');
-      ws.addRow(['BU', '项目名称', '员工', '部门简称', '所属部门', '职位', ...months]);
-      rows.forEach(r => ws.addRow([r.bu || '', r.project_name, r.employee_name, r.department, r.department_full, r.position, ...months.map(m => r.months[m] ?? 0)]));
+      ws.addRow(['BU', '项目名称', '员工', '部门简称', '所属部门', '职位', ...months, '总计']);
+      rows.forEach(r => ws.addRow([
+        r.bu || '',
+        r.project_name,
+        r.employee_name,
+        r.department,
+        r.department_full,
+        r.position,
+        ...months.map(m => r.months[m] ?? 0),
+        parseFloat(Object.values(r.months || {}).reduce((sum, value) => sum + Number(value || 0), 0).toFixed(6))
+      ]));
       applyWorkbookStyle(wb);
       const now = new Date(); const pad = v => String(v).padStart(2, '0');
       await saveWorkbook(wb, `人月占比_Close口径_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}.xlsx`);

@@ -14,6 +14,9 @@ class CustomDataFrontendTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = APP_PATH.read_text(encoding="utf-8")
+        cls.custom_data_panel = (
+            ROOT / "frontend" / "src" / "components" / "dashboard" / "CustomDataPanel.jsx"
+        ).read_text(encoding="utf-8")
 
     def run_export_helper(self, entries):
         helper_url = CUSTOM_EXPORT_PATH.resolve().as_uri()
@@ -161,6 +164,17 @@ class CustomDataFrontendTests(unittest.TestCase):
 
         self.assertEqual(result["headers"][:6], ["BU", "项目", "员工", "部门简称", "所属部门", "职位"])
         self.assertEqual(result["rows"][0][:6], ["SCD", "Alpha", "Bob", "Digital", "110.1 R&D - Digital", "Designer"])
+
+    def test_person_month_ratio_export_has_total_column(self):
+        self.assertIn(
+            "ws.addRow(['BU', '项目名称', '员工', '部门简称', '所属部门', '职位', ...months, '总计']);",
+            self.custom_data_panel,
+        )
+        self.assertIn("...months.map(m => r.months[m] ?? 0),", self.custom_data_panel)
+        self.assertIn(
+            "parseFloat(Object.values(r.months || {}).reduce((sum, value) => sum + Number(value || 0), 0).toFixed(6))",
+            self.custom_data_panel,
+        )
 
 
 if __name__ == "__main__":
