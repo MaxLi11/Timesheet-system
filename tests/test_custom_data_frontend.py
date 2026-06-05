@@ -47,13 +47,15 @@ class CustomDataFrontendTests(unittest.TestCase):
     def test_custom_data_tab_and_export_card_exist(self):
         self.assertIn("customDataTitle", self.app)
         self.assertIn("customDataSubtitle", self.app)
-        self.assertIn("exportCustomData", self.app)
-        self.assertIn("customDataReuploadHint", self.app)
         self.assertIn("{ id: 'custom_data'", self.app)
         self.assertIn("activeTab === 'custom_data'", self.app)
-        self.assertIn("const exportCustomProjectHoursExcel = () => {", self.app)
-        self.assertIn("buildCustomProjectHoursExport(data, workWeeks)", self.app)
-        self.assertIn("XLSX.utils.aoa_to_sheet", self.app)
+        self.assertIn("CustomDataPanel", self.app)
+        self.assertIn("exportCustomData", self.custom_data_panel)
+        self.assertIn("const exportCustomProjectHoursExcel = async () => {", self.custom_data_panel)
+        self.assertIn("buildCustomProjectHoursExport(data, weeks)", self.custom_data_panel)
+        self.assertIn("const ExcelJS = (await import('exceljs')).default;", self.custom_data_panel)
+        self.assertIn("ws.addRow(workbookData.headers);", self.custom_data_panel)
+        self.assertIn("applyWorkbookStyle(wb);", self.custom_data_panel)
 
     def test_custom_export_helper_builds_continuous_month_matrix(self):
         result = self.run_export_helper(

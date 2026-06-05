@@ -5,6 +5,9 @@ from pathlib import Path
 
 CSS_PATH = Path(__file__).resolve().parents[1] / "frontend" / "src" / "index.css"
 APP_PATH = Path(__file__).resolve().parents[1] / "frontend" / "src" / "App.jsx"
+OVERVIEW_PANEL_PATH = Path(__file__).resolve().parents[1] / "frontend" / "src" / "components" / "dashboard" / "OverviewPanel.jsx"
+PROJECT_ANALYSIS_PANEL_PATH = Path(__file__).resolve().parents[1] / "frontend" / "src" / "components" / "dashboard" / "ProjectAnalysisPanel.jsx"
+TRANSLATIONS_PATH = Path(__file__).resolve().parents[1] / "frontend" / "src" / "i18n" / "translations.js"
 
 
 class FrontendStyleDensityTests(unittest.TestCase):
@@ -12,6 +15,9 @@ class FrontendStyleDensityTests(unittest.TestCase):
     def setUpClass(cls):
         cls.css = CSS_PATH.read_text(encoding="utf-8")
         cls.app = APP_PATH.read_text(encoding="utf-8")
+        cls.overview_panel = OVERVIEW_PANEL_PATH.read_text(encoding="utf-8")
+        cls.project_analysis_panel = PROJECT_ANALYSIS_PANEL_PATH.read_text(encoding="utf-8")
+        cls.translations = TRANSLATIONS_PATH.read_text(encoding="utf-8")
 
     def assertCssPattern(self, pattern):
         self.assertRegex(self.css, re.compile(pattern, re.MULTILINE | re.DOTALL))
@@ -64,10 +70,10 @@ class FrontendStyleDensityTests(unittest.TestCase):
             r"\.module-caption\s*\{[^}]*font-size:\s*0\.78rem;"
         )
         self.assertCssPattern(
-            r"\.stat-card\s*\{[^}]*min-height:\s*7\.75rem;"
+            r"\.stat-card\s*\{[^}]*min-height:\s*6rem;"
         )
         self.assertCssPattern(
-            r"\.stat-value\s*\{[^}]*font-size:\s*clamp\(1\.42rem,\s*2\.7vw,\s*2\.02rem\);"
+            r"\.stat-value\s*\{[^}]*font-size:\s*clamp\(1\.72rem,\s*3\.2vw,\s*2\.5rem\);"
         )
         self.assertCssPattern(
             r"\.stat-footnote\s*\{[^}]*font-size:\s*0\.66rem;"
@@ -111,23 +117,19 @@ class FrontendStyleDensityTests(unittest.TestCase):
     def test_dashboard_granularity_toggle_is_present_and_compact(self):
         self.assertIn(
             "const [dashGranularity, setDashGranularity] = useState('monthly');",
-            self.app,
+            self.overview_panel,
         )
         self.assertIn(
             "const effectiveDashGranularity = useMemo(() => (dashMonth || dashWeek ? 'weekly' : dashGranularity), [dashGranularity, dashMonth, dashWeek]);",
-            self.app,
+            self.overview_panel,
         )
         self.assertIn(
-            "dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity)",
-            self.app,
+            "dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity, workWeeks)",
+            self.overview_panel,
         )
-        self.assertIn(
-            "dataHelper.aggregateProjectData(filteredData, effectiveDashGranularity)",
-            self.app,
-        )
-        self.assertIn('className="granularity-toggle"', self.app)
-        self.assertIn('{t.period.monthly}', self.app)
-        self.assertIn('{t.period.quarterly}', self.app)
+        self.assertIn('className="granularity-toggle"', self.overview_panel)
+        self.assertIn('{t.period.monthly}', self.overview_panel)
+        self.assertIn('{t.period.quarterly}', self.overview_panel)
         self.assertCssPattern(
             r"\.granularity-toggle\s*\{[^}]*padding:\s*0\.2rem;[^}]*border-radius:\s*16px;"
         )
@@ -155,13 +157,13 @@ class FrontendStyleDensityTests(unittest.TestCase):
         )
 
     def test_top_department_copy_is_renamed_for_clarity(self):
-        self.assertIn("topDept: '最高工时部门'", self.app)
-        self.assertIn("topDept: 'Top Hours Dept'", self.app)
+        self.assertIn("topDept: '最高工时部门'", self.translations)
+        self.assertIn("topDept: 'Top Hours Dept'", self.translations)
 
 
     def test_overview_insight_module_is_removed(self):
-        self.assertIn('className="overview-secondary-grid"', self.app)
-        self.assertNotIn('className="card overview-insight-card elevated-module"', self.app)
+        self.assertIn('className="card chart-card full-width"', self.overview_panel)
+        self.assertNotIn('className="card overview-insight-card elevated-module"', self.overview_panel)
 
     def test_gantt_section_is_removed(self):
         self.assertNotIn("id: 'gantt'", self.app)
@@ -170,10 +172,10 @@ class FrontendStyleDensityTests(unittest.TestCase):
         self.assertNotIn("ReactECharts option={ganttOpt}", self.app)
 
     def test_project_analysis_legacy_module_is_removed(self):
-        self.assertNotIn('className="legacy-project-chart-card', self.app)
-        self.assertNotIn('className="legacy-chart-toggle"', self.app)
-        self.assertNotIn("const projectAnalysisOpt = useMemo(() => {", self.app)
-        self.assertIn('className="project-schedule-actions"', self.app)
+        self.assertNotIn('className="legacy-project-chart-card', self.project_analysis_panel)
+        self.assertNotIn('className="legacy-chart-toggle"', self.project_analysis_panel)
+        self.assertNotIn("const projectAnalysisOpt = useMemo(() => {", self.project_analysis_panel)
+        self.assertIn('className="project-schedule-section section-shell"', self.project_analysis_panel)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ ENV VITE_API_URL=""
 
 # Better caching for dependencies
 COPY frontend/package*.json ./
-RUN npm install --no-update-notifier
+RUN npm ci --no-update-notifier
 
 COPY frontend/ ./
 RUN npm run build

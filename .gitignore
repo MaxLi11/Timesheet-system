@@ -19,6 +19,8 @@ frontend/dist/
 temp_*
 .worktrees/
 .npm-cache/
+deliverables/
+.claude/
 
 # Database
 timesheet.db
