@@ -283,6 +283,27 @@ class AnxUploadRulesTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_audit_flags_exact_duplicate_rows(self):
+        audit = parser._new_upload_audit()
+        entry = {
+            "employee_name": "Alice",
+            "project_name": "KGD",
+            "category": "Project",
+            "start_date": date(2026, 1, 5),
+            "end_date": date(2026, 1, 9),
+            "hours": 6,
+            "task_details": "project work",
+            "current_node": "Close",
+            "approval_status": "Approved",
+        }
+
+        parser._finalize_upload_audit(audit, [entry, entry.copy()])
+
+        self.assertEqual(audit["duplicate_row_count"], 1)
+        self.assertEqual(len(audit["duplicate_rows"]), 1)
+        self.assertEqual(audit["duplicate_rows"][0]["employee_name"], "Alice")
+        self.assertEqual(audit["duplicate_rows"][0]["count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -436,6 +436,193 @@ p {
   min-width: max-content;
 }
 
+.upload-audit-panel {
+  margin-top: 0.86rem;
+  padding: 0.86rem 0.92rem;
+  border: 1px solid rgba(51, 180, 126, 0.18);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(244, 253, 249, 0.94), rgba(244, 248, 255, 0.92));
+  box-shadow: 0 16px 36px rgba(84, 113, 163, 0.1);
+}
+
+.upload-audit-heading,
+.upload-audit-title {
+  display: flex;
+  align-items: center;
+}
+
+.upload-audit-heading {
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.78rem;
+}
+
+.upload-audit-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 0.4rem;
+}
+
+.upload-audit-title {
+  gap: 0.58rem;
+  min-width: 0;
+}
+
+.upload-audit-title svg {
+  flex: 0 0 auto;
+  color: var(--success);
+}
+
+.upload-audit-title div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.upload-audit-title strong {
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+.upload-audit-title span {
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(115, 138, 176, 0.16);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink-muted);
+  box-shadow: none;
+}
+
+.icon-button:hover {
+  color: var(--ink);
+  background: #fff;
+  transform: none;
+}
+
+.upload-audit-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.54rem;
+}
+
+.upload-audit-metrics div {
+  min-width: 0;
+  padding: 0.56rem 0.62rem;
+  border: 1px solid rgba(115, 138, 176, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.upload-audit-metrics span,
+.upload-audit-details span,
+.upload-audit-expanded span {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 0.6rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.upload-audit-metrics strong {
+  display: block;
+  margin-top: 0.22rem;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.upload-audit-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.42rem 0.82rem;
+  margin: 0.78rem 0 0;
+}
+
+.upload-audit-details p {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.42;
+}
+
+.upload-audit-details span {
+  margin-bottom: 0.14rem;
+}
+
+.upload-audit-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  margin-top: 0.74rem;
+  padding: 0.38rem 0.58rem;
+  border-radius: 999px;
+  border: 1px solid rgba(77, 114, 255, 0.14);
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--primary-strong);
+  box-shadow: none;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.upload-audit-expand:hover {
+  background: #fff;
+  transform: none;
+}
+
+.upload-audit-expand svg {
+  transition: transform 160ms ease;
+}
+
+.upload-audit-expand svg.is-open {
+  transform: rotate(180deg);
+}
+
+.upload-audit-expanded {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.58rem;
+  margin-top: 0.64rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(115, 138, 176, 0.14);
+}
+
+.upload-audit-expanded div {
+  min-width: 0;
+  max-height: 8.5rem;
+  overflow: auto;
+  padding: 0.58rem 0.64rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.upload-audit-expanded p {
+  margin: 0.16rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.46;
+}
+
 .top-nav-item {
   display: inline-flex;
   align-items: center;
@@ -1627,6 +1814,9 @@ input[type='checkbox']:checked::after {
   .stats-grid,
   .hero-panel-grid,
   .insight-grid,
+  .upload-audit-metrics,
+  .upload-audit-details,
+  .upload-audit-expanded,
   .project-checkboxes {
     grid-template-columns: 1fr;
   }

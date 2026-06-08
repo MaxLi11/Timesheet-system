@@ -11,6 +11,7 @@ export const useTimesheetData = (t) => {
   const [workWeeks, setWorkWeeks] = useState([]);
   const [approvalData, setApprovalData] = useState([]);
   const [projectScheduleData, setProjectScheduleData] = useState({ projects: [] });
+  const [uploadAuditReport, setUploadAuditReport] = useState(null);
 
   const checkConnection = async () => {
     try {
@@ -129,7 +130,15 @@ export const useTimesheetData = (t) => {
       const result = await res.json();
       if (!res.ok) throw new Error(result.detail || result.message || 'Upload failed');
       const vc = result.vanished_count ?? 0;
-      alert(`${t.success} ${result.rows_processed} rows, employees ${result.employees_processed ?? 0}. ${t.vanishedUploadCount}: ${vc}.`);
+      setUploadAuditReport({
+        fileName: file.name,
+        uploadedAt: new Date().toISOString(),
+        rowsProcessed: result.rows_processed ?? 0,
+        employeesProcessed: result.employees_processed ?? 0,
+        vanishedCount: vc,
+        vanishedEmployees: Array.isArray(result.vanished_employees) ? result.vanished_employees : [],
+        audit: result.audit || {},
+      });
       fetchData();
       fetchReportingData();
       fetchActiveEmployees();
@@ -192,6 +201,8 @@ export const useTimesheetData = (t) => {
     handleFileUpload,
     handleWorkWeekUpload,
     handleProjectScheduleUpload,
+    uploadAuditReport,
+    clearUploadAuditReport: () => setUploadAuditReport(null),
     refreshProjectScheduleData: fetchProjectScheduleData
   };
 };

@@ -7,6 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_PATH = ROOT / "frontend" / "src" / "App.jsx"
+HEADER_PATH = ROOT / "frontend" / "src" / "components" / "layout" / "Header.jsx"
+HOOK_PATH = ROOT / "frontend" / "src" / "hooks" / "useTimesheetData.js"
 CUSTOM_EXPORT_PATH = ROOT / "frontend" / "src" / "utils" / "customDataExport.js"
 
 
@@ -17,6 +19,8 @@ class CustomDataFrontendTests(unittest.TestCase):
         cls.custom_data_panel = (
             ROOT / "frontend" / "src" / "components" / "dashboard" / "CustomDataPanel.jsx"
         ).read_text(encoding="utf-8")
+        cls.header = HEADER_PATH.read_text(encoding="utf-8")
+        cls.timesheet_hook = HOOK_PATH.read_text(encoding="utf-8")
 
     def run_export_helper(self, entries):
         helper_url = CUSTOM_EXPORT_PATH.resolve().as_uri()
@@ -56,6 +60,21 @@ class CustomDataFrontendTests(unittest.TestCase):
         self.assertIn("const ExcelJS = (await import('exceljs')).default;", self.custom_data_panel)
         self.assertIn("ws.addRow(workbookData.headers);", self.custom_data_panel)
         self.assertIn("applyWorkbookStyle(wb);", self.custom_data_panel)
+
+    def test_upload_audit_report_is_visible_after_timesheet_upload(self):
+        self.assertIn("uploadAuditReport", self.timesheet_hook)
+        self.assertIn("setUploadAuditReport", self.timesheet_hook)
+        self.assertIn("result.audit || {}", self.timesheet_hook)
+        self.assertIn("uploadAuditReport={uploadAuditReport}", self.app)
+        self.assertIn("clearUploadAuditReport={clearUploadAuditReport}", self.app)
+        self.assertIn("upload-audit-panel", self.header)
+        self.assertIn("audit.bu_overwrites", self.header)
+        self.assertIn("audit.unmatched_projects", self.header)
+        self.assertIn("audit.monthly_summary", self.header)
+        self.assertIn("downloadAuditCsv", self.header)
+        self.assertIn("upload-audit-expanded", self.header)
+        self.assertIn("audit.duplicate_rows", self.header)
+        self.assertIn("uploadDuplicateRows", self.header)
 
     def test_custom_export_helper_builds_continuous_month_matrix(self):
         result = self.run_export_helper(

@@ -48,7 +48,9 @@ const App = () => {
     projectScheduleData,
     handleFileUpload,
     handleWorkWeekUpload,
-    handleProjectScheduleUpload
+    handleProjectScheduleUpload,
+    uploadAuditReport,
+    clearUploadAuditReport
   } = useTimesheetData(t);
 
   const pageMeta = useMemo(() => {
@@ -88,6 +90,8 @@ const App = () => {
         navItems={navItems}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        uploadAuditReport={uploadAuditReport}
+        clearUploadAuditReport={clearUploadAuditReport}
       />
 
       <main className="main-content">

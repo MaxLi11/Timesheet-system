@@ -538,6 +538,8 @@ def _new_upload_audit():
         "historical_exception_projects": [],
         "unmatched_projects": [],
         "blank_project_bu_rows": [],
+        "duplicate_rows": [],
+        "duplicate_row_count": 0,
         "monthly_summary": {},
     }
 
@@ -646,6 +648,7 @@ def _resolve_project_name_and_bu(raw_project_name, raw_bu, project_standards, al
 def _finalize_upload_audit(audit, entries):
     audit["rows_processed"] = len(entries)
     monthly = {}
+    duplicate_counts = {}
     project_hours = 0.0
     non_project_hours = 0.0
 
@@ -670,9 +673,42 @@ def _finalize_upload_audit(audit, entries):
                 bucket["non_project_hours"] += hours
             bucket["total_hours"] += hours
 
+        duplicate_key = (
+            entry.get("employee_name") or "",
+            entry.get("project_name") or "",
+            category,
+            str(entry.get("start_date") or ""),
+            str(entry.get("end_date") or ""),
+            round(hours, 6),
+            entry.get("task_details") or "",
+            entry.get("current_node") or "",
+            entry.get("approval_status") or "",
+        )
+        duplicate_counts[duplicate_key] = duplicate_counts.get(duplicate_key, 0) + 1
+
     audit["project_hours"] = round(project_hours, 3)
     audit["non_project_hours"] = round(non_project_hours, 3)
     audit["total_hours"] = round(project_hours + non_project_hours, 3)
+    duplicate_items = []
+    for key, count in duplicate_counts.items():
+        if count <= 1:
+            continue
+        employee, project, category, start_date, end_date, hours, task_details, current_node, approval_status = key
+        duplicate_items.append({
+            "employee_name": employee,
+            "project_name": project,
+            "category": category,
+            "start_date": start_date,
+            "end_date": end_date,
+            "hours": hours,
+            "current_node": current_node,
+            "approval_status": approval_status,
+            "task_details": task_details[:120],
+            "count": count,
+        })
+    duplicate_items.sort(key=lambda item: (-item["count"], -float(item["hours"] or 0), item["employee_name"]))
+    audit["duplicate_rows"] = duplicate_items[:20]
+    audit["duplicate_row_count"] = sum(item["count"] - 1 for item in duplicate_items)
     audit["monthly_summary"] = {
         month: {
             "project_hours": round(values["project_hours"], 3),
